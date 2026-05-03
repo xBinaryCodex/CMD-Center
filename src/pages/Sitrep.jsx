@@ -181,96 +181,168 @@ function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCr
   )
 }
 
-// ─── Project Selector (Boeing / GameDev etc) ─────────────────────────────────
+// ─── Project / Client / Course Panel ─────────────────────────────────────────
+// Owns the selector + scoped Notes AND Objectives for the active entry only
 
 function ProjectPanel({ card, onUpdateCard, addXp, ts }) {
+  const [tab, setTab]       = useState('notes')
   const [newName, setNewName] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+
+  const label    = card.projectLabel || 'Project'
   const projects = card.projects || []
   const activeProj = projects.find(p => p.id === card.activeProjectId) || projects[0]
+  const c = ACCENT_COLORS[card.accentColor] || ACCENT_COLORS.green
 
-  const addProject = () => {
-    if (!newName.trim()) return
-    const id = crypto.randomUUID()
-    onUpdateCard({ projects: [...projects, { id, name: newName.trim(), notes: [] }], activeProjectId: id })
-    setNewName('')
-    setShowAdd(false)
-    addXp(10, `New project: ${newName}`)
-  }
+  // ── helpers that write only to the active project ──────────────────────
 
-  const removeProject = (id) => {
-    const remaining = projects.filter(p => p.id !== id)
-    onUpdateCard({
-      projects: remaining,
-      activeProjectId: remaining[0]?.id || null
-    })
-  }
-
-  const addNote = (projId, text) => {
+  const updateActiveProj = (fields) => {
     onUpdateCard({
       projects: projects.map(p =>
-        p.id === projId
-          ? { ...p, notes: [{ id: crypto.randomUUID(), text, at: ts() }, ...(p.notes || [])] }
-          : p
+        p.id === activeProj?.id ? { ...p, ...fields } : p
       )
     })
-    addXp(5, `Project note: ${text.slice(0, 30)}`)
   }
+
+  const addNote = (text) => {
+    updateActiveProj({ notes: [{ id: crypto.randomUUID(), text, at: ts() }, ...(activeProj?.notes || [])] })
+    addXp(5, `${label} note: ${text.slice(0, 30)}`)
+  }
+
+  const addObjective = (text, critical) => {
+    updateActiveProj({
+      objectives: [...(activeProj?.objectives || []),
+        { id: crypto.randomUUID(), text, critical: !!critical, done: false, doneAt: null, at: ts() }
+      ]
+    })
+    addXp(5, `${label} objective added`)
+  }
+
+  const toggleObjective = (id) => {
+    const obj = (activeProj?.objectives || []).find(o => o.id === id)
+    updateActiveProj({
+      objectives: (activeProj?.objectives || []).map(o =>
+        o.id === id ? { ...o, done: !o.done, doneAt: !o.done ? ts() : null } : o
+      )
+    })
+    if (!obj?.done) addXp(obj?.critical ? 50 : 25, `Done: ${obj?.text?.slice(0, 30)}`)
+  }
+
+  const deleteObjective = (id) =>
+    updateActiveProj({ objectives: (activeProj?.objectives || []).filter(o => o.id !== id) })
+
+  const toggleCritical = (id) =>
+    updateActiveProj({
+      objectives: (activeProj?.objectives || []).map(o =>
+        o.id === id ? { ...o, critical: !o.critical } : o
+      )
+    })
+
+  // ── add / remove entries ───────────────────────────────────────────────
+
+  const addEntry = () => {
+    if (!newName.trim()) return
+    const id = crypto.randomUUID()
+    onUpdateCard({
+      projects: [...projects, { id, name: newName.trim(), notes: [], objectives: [] }],
+      activeProjectId: id,
+    })
+    setNewName('')
+    setShowAdd(false)
+    addXp(10, `New ${label}: ${newName}`)
+  }
+
+  const removeEntry = (id) => {
+    const remaining = projects.filter(p => p.id !== id)
+    onUpdateCard({ projects: remaining, activeProjectId: remaining[0]?.id || null })
+  }
+
+  const activeCount = (activeProj?.objectives || []).filter(o => !o.done).length
+
+  // ── render ─────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-3">
-      {/* Project selector */}
+      {/* Selector row */}
       <div>
-        <label className="ops-label">Active Project</label>
+        <label className="ops-label">Active {label}</label>
         <div className="flex gap-2">
           <select
             className="ops-input flex-1 text-sm"
             value={card.activeProjectId || ''}
-            onChange={e => onUpdateCard({ activeProjectId: e.target.value })}
+            onChange={e => { onUpdateCard({ activeProjectId: e.target.value }); setTab('notes') }}
           >
             {projects.map(p => (
               <option key={p.id} value={p.id} className="bg-bunker-800">{p.name}</option>
             ))}
           </select>
-          <button onClick={() => setShowAdd(s => !s)} className="ops-btn-primary flex-shrink-0" title="Add project">
+          <button onClick={() => setShowAdd(s => !s)} className="ops-btn-primary flex-shrink-0" title={`Add ${label}`}>
             <Plus className="w-3.5 h-3.5" />
           </button>
           {projects.length > 1 && activeProj && (
-            <button
-              onClick={() => removeProject(activeProj.id)}
-              className="ops-btn-danger flex-shrink-0"
-              title="Remove this project"
-            >
+            <button onClick={() => removeEntry(activeProj.id)} className="ops-btn-danger flex-shrink-0" title={`Remove ${label}`}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
+
         {showAdd && (
           <div className="flex gap-2 mt-2">
             <input
               className="ops-input flex-1 text-sm"
-              placeholder="Project name…"
+              placeholder={`${label} name…`}
               value={newName}
               onChange={e => setNewName(e.target.value)}
               autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') addProject(); if (e.key === 'Escape') setShowAdd(false) }}
+              onKeyDown={e => { if (e.key === 'Enter') addEntry(); if (e.key === 'Escape') setShowAdd(false) }}
             />
-            <button onClick={addProject} className="ops-btn-primary flex-shrink-0"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={addEntry} className="ops-btn-primary flex-shrink-0"><Check className="w-3.5 h-3.5" /></button>
             <button onClick={() => setShowAdd(false)} className="ops-btn-ghost flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
           </div>
         )}
       </div>
 
-      {/* Active project note history */}
+      {/* Scoped tabs — only for the active project/client/course */}
       {activeProj && (
-        <div>
-          <label className="ops-label">Project Notes — {activeProj.name}</label>
-          <NoteHistory
-            notes={activeProj.notes || []}
-            onAdd={(text) => addNote(activeProj.id, text)}
-            accentColor={card.accentColor}
-          />
-        </div>
+        <>
+          <div className="flex border border-bunker-700 rounded overflow-hidden">
+            <button
+              onClick={() => setTab('notes')}
+              className={`flex-1 py-1.5 text-xs font-semibold transition-colors
+                ${tab === 'notes' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
+            >
+              <Clock className="w-3 h-3 inline mr-1" />
+              Notes ({(activeProj.notes || []).length})
+            </button>
+            <button
+              onClick={() => setTab('objectives')}
+              className={`flex-1 py-1.5 text-xs font-semibold transition-colors
+                ${tab === 'objectives' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
+            >
+              <Target className="w-3 h-3 inline mr-1" />
+              Objectives ({activeCount})
+            </button>
+          </div>
+
+          {tab === 'notes' && (
+            <NoteHistory
+              notes={activeProj.notes || []}
+              onAdd={addNote}
+              accentColor={card.accentColor}
+            />
+          )}
+
+          {tab === 'objectives' && (
+            <CardObjectives
+              objectives={activeProj.objectives || []}
+              onAdd={addObjective}
+              onToggle={toggleObjective}
+              onDelete={deleteObjective}
+              onToggleCritical={toggleCritical}
+              accentColor={card.accentColor}
+            />
+          )}
+        </>
       )}
     </div>
   )
@@ -421,7 +493,10 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
   const deleteObjective = (id) => set({ objectives: (card.objectives || []).filter(o => o.id !== id) })
   const toggleCritical  = (id) => set({ objectives: (card.objectives || []).map(o => o.id === id ? { ...o, critical: !o.critical } : o) })
 
-  const activeCount = (card.objectives || []).filter(o => !o.done).length
+  // For hasProjects cards the objective count spans ALL projects (badge on header)
+  const activeCount = card.hasProjects
+    ? (card.projects || []).flatMap(p => p.objectives || []).filter(o => !o.done).length
+    : (card.objectives || []).filter(o => !o.done).length
 
   return (
     <div className={`bg-bunker-900 border border-bunker-700 border-l-4 ${c.border} rounded-lg overflow-hidden`}>
@@ -471,7 +546,7 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
             </div>
           )}
 
-          {/* WGU-specific fields */}
+          {/* WGU-specific fields — program, term days, CUs (course is handled by ProjectPanel as Course selector) */}
           {card.id === 'wgu' && (
             <div className="space-y-3 pb-2 border-b border-bunker-800">
               <div className="grid grid-cols-2 gap-3">
@@ -482,15 +557,13 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
                     onSave={v => { set({ daysLeftInTerm: Number(v) }); addXp(3, 'Updated WGU term days') }} />
                 </div>
               </div>
-              <InlineField label="Current Course" value={card.currentCourse}
-                onSave={v => { set({ currentCourse: v }); addXp(3, 'Updated WGU course') }} />
               <div>
                 <label className="ops-label">Credit Units — {card.completedCUs} / {card.totalCUs}</label>
                 <div className="flex items-center gap-3 mt-1">
                   <div className="flex-1 h-2.5 bg-bunker-700 rounded-full overflow-hidden">
                     <div className={`h-full ${c.dot} rounded-full xp-bar-fill`} style={{ width: `${Math.min((card.completedCUs/card.totalCUs)*100, 100)}%` }} />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <InlineField label="" value={card.completedCUs} type="number" min={0} max={card.totalCUs}
                       onSave={v => { set({ completedCUs: Number(v) }); addXp(10, 'Updated WGU CUs completed') }} />
                     <span className="text-gray-600 text-sm">/</span>
@@ -545,43 +618,43 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
               onSave={v => set({ subtitle: v })} />
           )}
 
-          {/* Project panel (Boeing, GameDev, or any hasProjects card) */}
-          {card.hasProjects && (
-            <div className="pb-2 border-b border-bunker-800">
-              <ProjectPanel card={card} onUpdateCard={(fields) => set(fields)} addXp={addXp} ts={ts} />
-            </div>
-          )}
+          {/* Project / Client / Course panel — owns Notes + Objectives when hasProjects */}
+          {card.hasProjects ? (
+            <ProjectPanel card={card} onUpdateCard={(fields) => set(fields)} addXp={addXp} ts={ts} />
+          ) : (
+            <>
+              {/* Card-level Notes | Objectives — only for cards without projects */}
+              <div className="flex border border-bunker-700 rounded overflow-hidden">
+                <button
+                  onClick={() => setTab('notes')}
+                  className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'notes' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
+                >
+                  <Clock className="w-3 h-3 inline mr-1" />
+                  Notes ({(card.notes || []).length})
+                </button>
+                <button
+                  onClick={() => setTab('objectives')}
+                  className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'objectives' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
+                >
+                  <Target className="w-3 h-3 inline mr-1" />
+                  Objectives ({activeCount})
+                </button>
+              </div>
 
-          {/* Tab bar: Notes | Objectives */}
-          <div className="flex border border-bunker-700 rounded overflow-hidden">
-            <button
-              onClick={() => setTab('notes')}
-              className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'notes' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
-            >
-              <Clock className="w-3 h-3 inline mr-1" />
-              Notes ({(card.notes || []).length})
-            </button>
-            <button
-              onClick={() => setTab('objectives')}
-              className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'objectives' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
-            >
-              <Target className="w-3 h-3 inline mr-1" />
-              Objectives ({activeCount})
-            </button>
-          </div>
-
-          {tab === 'notes' && (
-            <NoteHistory notes={card.notes || []} onAdd={addNote} accentColor={card.accentColor} />
-          )}
-          {tab === 'objectives' && (
-            <CardObjectives
-              objectives={card.objectives || []}
-              onAdd={addObjective}
-              onToggle={toggleObjective}
-              onDelete={deleteObjective}
-              onToggleCritical={toggleCritical}
-              accentColor={card.accentColor}
-            />
+              {tab === 'notes' && (
+                <NoteHistory notes={card.notes || []} onAdd={addNote} accentColor={card.accentColor} />
+              )}
+              {tab === 'objectives' && (
+                <CardObjectives
+                  objectives={card.objectives || []}
+                  onAdd={addObjective}
+                  onToggle={toggleObjective}
+                  onDelete={deleteObjective}
+                  onToggleCritical={toggleCritical}
+                  accentColor={card.accentColor}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -623,10 +696,22 @@ export default function Sitrep() {
     addXp(15, `New SITREP card: ${fields.title}`)
   }
 
-  // All active objectives across all cards for the summary strip
-  const allActiveObj = cards.flatMap(c =>
-    (c.objectives || []).filter(o => !o.done).map(o => ({ ...o, cardTitle: c.title, cardColor: c.accentColor }))
-  )
+  // All active objectives — from project objectives for hasProjects cards, card-level for others
+  const allActiveObj = cards.flatMap(c => {
+    if (c.hasProjects) {
+      return (c.projects || []).flatMap(p =>
+        (p.objectives || []).filter(o => !o.done).map(o => ({
+          ...o,
+          cardTitle: c.title,
+          projectName: p.name,
+          cardColor: c.accentColor,
+        }))
+      )
+    }
+    return (c.objectives || []).filter(o => !o.done).map(o => ({
+      ...o, cardTitle: c.title, cardColor: c.accentColor,
+    }))
+  })
   const criticalObj = allActiveObj.filter(o => o.critical)
 
   return (
@@ -653,7 +738,7 @@ export default function Sitrep() {
           </div>
           {criticalObj.map(o => (
             <div key={o.id} className="text-[11px] px-2 py-0.5 rounded border border-ops-red/40 bg-ops-red/10 text-ops-red">
-              <span className="text-gray-500">[{o.cardTitle}]</span> {o.text}
+              <span className="text-gray-500">[{o.cardTitle}{o.projectName ? ` / ${o.projectName}` : ''}]</span> {o.text}
             </div>
           ))}
         </div>
@@ -694,7 +779,7 @@ export default function Sitrep() {
               return (
                 <div key={o.id} className={`flex items-center gap-2 text-xs p-1.5 rounded ${o.critical ? 'bg-ops-red/5' : ''}`}>
                   <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
-                  <span className="text-gray-500 flex-shrink-0">[{o.cardTitle}]</span>
+                  <span className="text-gray-500 flex-shrink-0">[{o.cardTitle}{o.projectName ? ` / ${o.projectName}` : ''}]</span>
                   <span className="text-gray-200 flex-1">{o.text}</span>
                   {o.critical && <AlertTriangle className="w-3 h-3 text-ops-red flex-shrink-0" />}
                 </div>

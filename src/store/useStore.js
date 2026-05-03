@@ -27,13 +27,13 @@ export function buildDefaultCards() {
       status: 'In Progress',
       order: 0,
       collapsed: false,
-      // Boeing-specific
       role: 'L2 Network Tech (Dell Contract)',
       l3: 'Scottie Rodriguez',
       hasProjects: true,
+      projectLabel: 'Project',
       activeProjectId: 'wp-1',
       projects: [
-        { id: 'wp-1', name: 'Wireless Modernization – Legacy AP → Cisco 9166', notes: [] }
+        { id: 'wp-1', name: 'Wireless Modernization – Legacy AP → Cisco 9166', notes: [], objectives: [] }
       ],
       notes: [],
       objectives: [],
@@ -46,12 +46,16 @@ export function buildDefaultCards() {
       status: 'In Progress',
       order: 1,
       collapsed: false,
-      // WGU-specific
       program: 'BS Network & Cloud – AWS Track',
-      currentCourse: 'Cloud Practitioner',
       daysLeftInTerm: 30,
       completedCUs: 0,
       totalCUs: 120,
+      hasProjects: true,
+      projectLabel: 'Course',
+      activeProjectId: 'wgu-c1',
+      projects: [
+        { id: 'wgu-c1', name: 'Cloud Practitioner', notes: [], objectives: [] }
+      ],
       notes: [],
       objectives: [],
     },
@@ -64,6 +68,12 @@ export function buildDefaultCards() {
       order: 2,
       collapsed: false,
       tagline: 'Network Security & Pen Testing Consultation',
+      hasProjects: true,
+      projectLabel: 'Client',
+      activeProjectId: 'sd-gen',
+      projects: [
+        { id: 'sd-gen', name: 'General / Business Dev', notes: [], objectives: [] }
+      ],
       notes: [],
       objectives: [],
     },
@@ -78,9 +88,10 @@ export function buildDefaultCards() {
       engine: 'Godot',
       currentMilestone: '',
       hasProjects: true,
+      projectLabel: 'Project',
       activeProjectId: 'gd-1',
       projects: [
-        { id: 'gd-1', name: 'Supernatural Zelda-Style RPG', notes: [] }
+        { id: 'gd-1', name: 'Supernatural Zelda-Style RPG', notes: [], objectives: [] }
       ],
       notes: [],
       objectives: [],
@@ -168,14 +179,50 @@ function migrate(state) {
     delete state.objectives
   }
 
-  // Ensure every card has notes + objectives arrays (for cards added before this version)
+  // Ensure every card has notes + objectives arrays
   if (Array.isArray(state.sitrep?.cards)) {
-    state.sitrep.cards = state.sitrep.cards.map(c => ({
-      ...c,
-      notes: c.notes || [],
-      objectives: c.objectives || [],
-      projects: c.projects || undefined,
-    }))
+    state.sitrep.cards = state.sitrep.cards.map(c => {
+      // Ensure projects all have objectives[]
+      const projects = (c.projects || []).map(p => ({
+        ...p,
+        notes: p.notes || [],
+        objectives: p.objectives || [],
+      }))
+
+      // Migrate WGU: if no hasProjects, convert currentCourse into first project
+      if (c.id === 'wgu' && !c.hasProjects) {
+        const courseName = c.currentCourse || 'Cloud Practitioner'
+        return {
+          ...c,
+          hasProjects: true,
+          projectLabel: 'Course',
+          activeProjectId: 'wgu-c1',
+          projects: [{ id: 'wgu-c1', name: courseName, notes: c.notes || [], objectives: c.objectives || [] }],
+          notes: [],
+          objectives: [],
+        }
+      }
+
+      // Migrate SafeDays: if no hasProjects, move notes into General client
+      if (c.id === 'safedays' && !c.hasProjects) {
+        return {
+          ...c,
+          hasProjects: true,
+          projectLabel: 'Client',
+          activeProjectId: 'sd-gen',
+          projects: [{ id: 'sd-gen', name: 'General / Business Dev', notes: c.notes || [], objectives: c.objectives || [] }],
+          notes: [],
+          objectives: [],
+        }
+      }
+
+      return {
+        ...c,
+        notes: c.notes || [],
+        objectives: c.objectives || [],
+        projects: projects.length ? projects : c.projects,
+      }
+    })
   }
 
   return state
