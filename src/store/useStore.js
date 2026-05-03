@@ -23,7 +23,7 @@ export function buildDefaultCards() {
       id: 'boeing',
       title: 'Boeing — Dell Contract',
       icon: 'Network',
-      accentColor: 'blue',
+      accentColor: '#38bdf8',
       status: 'In Progress',
       order: 0,
       collapsed: false,
@@ -42,7 +42,7 @@ export function buildDefaultCards() {
       id: 'wgu',
       title: 'WGU — Cloud & Network BS',
       icon: 'BookOpen',
-      accentColor: 'purple',
+      accentColor: '#a78bfa',
       status: 'In Progress',
       order: 1,
       collapsed: false,
@@ -63,7 +63,7 @@ export function buildDefaultCards() {
       id: 'safedays',
       title: 'Safe Days Security',
       icon: 'Shield',
-      accentColor: 'green',
+      accentColor: '#00ff88',
       status: 'Active',
       order: 2,
       collapsed: false,
@@ -81,7 +81,7 @@ export function buildDefaultCards() {
       id: 'gamedev',
       title: 'Game Dev',
       icon: 'Gamepad2',
-      accentColor: 'amber',
+      accentColor: '#f59e0b',
       status: 'In Dev',
       order: 3,
       collapsed: false,
@@ -100,12 +100,17 @@ export function buildDefaultCards() {
       id: 'gdquest',
       title: 'GDQuest Course',
       icon: 'Brain',
-      accentColor: 'lime',
+      accentColor: '#a3e635',
       status: 'Active',
       order: 4,
       collapsed: false,
-      currentLesson: '',
       progressPercent: 0,
+      hasProjects: true,
+      projectLabel: 'Module',
+      activeProjectId: 'gdq-m1',
+      projects: [
+        { id: 'gdq-m1', name: 'Getting Started with Godot', notes: [], objectives: [] }
+      ],
       notes: [],
       objectives: [],
     },
@@ -131,6 +136,13 @@ const defaultState = {
   kaizen: [],
   focusSessions: [],
   xpLog: [],
+}
+
+// ─── Migration helpers ────────────────────────────────────────────────────
+
+const LEGACY_COLOR_HEX = {
+  blue: '#38bdf8', green: '#00ff88', purple: '#a78bfa',
+  amber: '#f59e0b', cyan: '#22d3ee', lime: '#a3e635', red: '#ef4444',
 }
 
 // ─── Migration: old flat sitrep → new cards structure ────────────────────
@@ -182,6 +194,10 @@ function migrate(state) {
   // Ensure every card has notes + objectives arrays
   if (Array.isArray(state.sitrep?.cards)) {
     state.sitrep.cards = state.sitrep.cards.map(c => {
+      // Convert legacy named color to hex
+      if (c.accentColor && !c.accentColor.startsWith('#')) {
+        c = { ...c, accentColor: LEGACY_COLOR_HEX[c.accentColor] || '#00ff88' }
+      }
       // Ensure projects all have objectives[]
       const projects = (c.projects || []).map(p => ({
         ...p,
@@ -198,6 +214,20 @@ function migrate(state) {
           projectLabel: 'Course',
           activeProjectId: 'wgu-c1',
           projects: [{ id: 'wgu-c1', name: courseName, notes: c.notes || [], objectives: c.objectives || [] }],
+          notes: [],
+          objectives: [],
+        }
+      }
+
+      // Migrate GDQuest: if no hasProjects, convert currentLesson into first module
+      if (c.id === 'gdquest' && !c.hasProjects) {
+        const lessonName = c.currentLesson || 'Getting Started with Godot'
+        return {
+          ...c,
+          hasProjects: true,
+          projectLabel: 'Module',
+          activeProjectId: 'gdq-m1',
+          projects: [{ id: 'gdq-m1', name: lessonName, notes: c.notes || [], objectives: c.objectives || [] }],
           notes: [],
           objectives: [],
         }

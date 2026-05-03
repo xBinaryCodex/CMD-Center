@@ -1,31 +1,51 @@
 import { useState } from 'react'
-import { useStore } from '../store/useStore'
-import { buildDefaultCards } from '../store/useStore'
+import { useStore, buildDefaultCards } from '../store/useStore'
 import {
   Network, BookOpen, Shield, Gamepad2, Brain, Briefcase, Code,
   Database, Globe, Server, Zap, Target, Star, Cpu, Plus,
-  ChevronDown, ChevronUp, Check, X, Edit3, Trash2, Save,
-  Clock, AlertTriangle, RotateCcw
+  ChevronDown, ChevronUp, Check, X, Edit3, Trash2,
+  Clock, AlertTriangle,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
-// ─── Config ──────────────────────────────────────────────────────────────────
+// ─── Dynamic hex color helpers ────────────────────────────────────────────────
 
-const ACCENT_COLORS = {
-  blue:   { border: 'border-l-ops-blue',   text: 'text-ops-blue',   pill: 'bg-ops-blue/15 text-ops-blue border-ops-blue/40',   dot: 'bg-ops-blue'   },
-  green:  { border: 'border-l-ops-green',  text: 'text-ops-green',  pill: 'bg-ops-green/15 text-ops-green border-ops-green/40',  dot: 'bg-ops-green'  },
-  purple: { border: 'border-l-ops-purple', text: 'text-ops-purple', pill: 'bg-ops-purple/15 text-ops-purple border-ops-purple/40', dot: 'bg-ops-purple' },
-  amber:  { border: 'border-l-ops-amber',  text: 'text-ops-amber',  pill: 'bg-ops-amber/15 text-ops-amber border-ops-amber/40',  dot: 'bg-ops-amber'  },
-  cyan:   { border: 'border-l-ops-cyan',   text: 'text-ops-cyan',   pill: 'bg-ops-cyan/15 text-ops-cyan border-ops-cyan/40',    dot: 'bg-ops-cyan'   },
-  lime:   { border: 'border-l-ops-lime',   text: 'text-ops-lime',   pill: 'bg-ops-lime/15 text-ops-lime border-ops-lime/40',    dot: 'bg-ops-lime'   },
-  red:    { border: 'border-l-ops-red',    text: 'text-ops-red',    pill: 'bg-ops-red/15 text-ops-red border-ops-red/40',       dot: 'bg-ops-red'    },
+function hexToRgb(hex) {
+  const h = (hex || '#00ff88').replace('#', '')
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ]
 }
+
+function ac(hex) {
+  const [r, g, b] = hexToRgb(hex)
+  const rgb = `${r},${g},${b}`
+  return {
+    color:    `rgb(${rgb})`,
+    bg12:     `rgba(${rgb},0.12)`,
+    bg06:     `rgba(${rgb},0.06)`,
+    bd30:     `rgba(${rgb},0.30)`,
+    bd60:     `rgba(${rgb},0.60)`,
+    // Inline style objects
+    text:     { color: `rgb(${rgb})` },
+    pill:     { backgroundColor: `rgba(${rgb},0.12)`, color: `rgb(${rgb})`, borderColor: `rgba(${rgb},0.40)` },
+    activeTab:{ backgroundColor: `rgba(${rgb},0.12)`, color: `rgb(${rgb})` },
+    dot:      { backgroundColor: `rgb(${rgb})` },
+    bar:      { backgroundColor: `rgb(${rgb})` },
+    leftBorder: { borderLeftColor: `rgb(${rgb})` },
+    cardBorder: { borderLeftColor: `rgb(${rgb})`, borderLeftWidth: '4px' },
+  }
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const ICON_MAP = {
-  Network: Network, BookOpen: BookOpen, Shield: Shield, Gamepad2: Gamepad2,
-  Brain: Brain, Briefcase: Briefcase, Code: Code, Database: Database,
-  Globe: Globe, Server: Server, Zap: Zap, Target: Target, Star: Star, Cpu: Cpu,
+  Network, BookOpen, Shield, Gamepad2, Brain, Briefcase,
+  Code, Database, Globe, Server, Zap, Target, Star, Cpu,
 }
+const ICON_OPTS = Object.keys(ICON_MAP)
 
 const STATUS_OPTS = ['Active','In Progress','On Hold','Planned','Completed','In Dev','Paused']
 const STATUS_COLORS = {
@@ -40,10 +60,10 @@ const STATUS_COLORS = {
 
 // ─── Note History ─────────────────────────────────────────────────────────────
 
-function NoteHistory({ notes = [], onAdd, accentColor = 'green', compact }) {
+function NoteHistory({ notes = [], onAdd, hex }) {
+  const a = ac(hex)
   const [text, setText] = useState('')
   const [showAll, setShowAll] = useState(false)
-  const c = ACCENT_COLORS[accentColor] || ACCENT_COLORS.green
   const visible = showAll ? notes : notes.slice(0, 3)
 
   const submit = () => {
@@ -57,52 +77,51 @@ function NoteHistory({ notes = [], onAdd, accentColor = 'green', compact }) {
       <div className="flex gap-2">
         <textarea
           className="ops-textarea flex-1 min-h-[52px] text-sm"
-          placeholder="Add a note… (timestamps automatically)"
+          placeholder="Add a note… (Ctrl+Enter to submit)"
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) submit() }}
         />
-        <button onClick={submit} className="ops-btn-primary flex-shrink-0 self-end px-3 py-2">
+        <button onClick={submit} className="ops-btn flex-shrink-0 self-end px-3 py-2 border rounded transition-all"
+          style={{ backgroundColor: a.bg12, color: a.color, borderColor: a.bd30 }}>
           <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {notes.length === 0 && (
-        <p className="text-[11px] text-gray-700 italic">No notes yet — add above.</p>
+        <p className="text-[11px] text-gray-700 italic">No notes yet.</p>
       )}
 
       <div className="space-y-1.5">
-        {visible.map((n, i) => (
-          <div key={n.id} className={`rounded p-2 border-l-2 bg-bunker-800 ${c.border.replace('border-l-', 'border-l-')}`}>
+        {visible.map(n => (
+          <div key={n.id} className="rounded p-2 bg-bunker-800 border-l-2" style={a.leftBorder}>
             <p className="text-xs text-gray-200 whitespace-pre-wrap leading-relaxed">{n.text}</p>
-            <p className="text-[9px] text-gray-600 mt-1">{format(parseISO(n.at), 'EEE MMM d, yyyy · HH:mm')}</p>
+            <p className="text-[9px] text-gray-600 mt-1">{format(parseISO(n.at), 'EEE MMM d yyyy · HH:mm')}</p>
           </div>
         ))}
       </div>
 
       {notes.length > 3 && (
-        <button
-          onClick={() => setShowAll(s => !s)}
-          className="text-[10px] text-gray-600 hover:text-gray-300 flex items-center gap-1 transition-colors"
-        >
+        <button onClick={() => setShowAll(s => !s)}
+          className="text-[10px] text-gray-600 hover:text-gray-300 flex items-center gap-1 transition-colors">
           {showAll
             ? <><ChevronUp className="w-3 h-3" /> Show less</>
-            : <><ChevronDown className="w-3 h-3" /> Show {notes.length - 3} older notes</>
-          }
+            : <><ChevronDown className="w-3 h-3" /> Show {notes.length - 3} older notes</>}
         </button>
       )}
     </div>
   )
 }
 
-// ─── Per-card Objectives ──────────────────────────────────────────────────────
+// ─── Objectives ───────────────────────────────────────────────────────────────
 
-function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCritical, accentColor }) {
+function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCritical, hex }) {
   const [text, setText] = useState('')
   const [critical, setCritical] = useState(false)
+  const [showDone, setShowDone] = useState(false)
+  const a = ac(hex)
   const active = objectives.filter(o => !o.done)
   const done   = objectives.filter(o =>  o.done)
-  const [showDone, setShowDone] = useState(false)
 
   const submit = () => {
     if (!text.trim()) return
@@ -114,63 +133,53 @@ function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCr
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <input
-          className="ops-input flex-1 text-sm"
-          placeholder="Add objective…"
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submit()}
-        />
-        <button
-          onClick={() => setCritical(c => !c)}
-          title="Mark critical"
-          className={`ops-btn flex-shrink-0 border ${critical ? 'bg-ops-red/20 border-ops-red/60 text-ops-red' : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}
-        >
+        <input className="ops-input flex-1 text-sm" placeholder="Add objective…"
+          value={text} onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submit()} />
+        <button onClick={() => setCritical(c => !c)} title="Mark critical"
+          className={`ops-btn flex-shrink-0 border rounded transition-colors
+            ${critical ? 'bg-ops-red/20 border-ops-red/60 text-ops-red' : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}>
           <AlertTriangle className="w-3 h-3" />
         </button>
-        <button onClick={submit} className="ops-btn-primary flex-shrink-0">
+        <button onClick={submit} className="ops-btn flex-shrink-0 border rounded transition-all px-3"
+          style={{ backgroundColor: a.bg12, color: a.color, borderColor: a.bd30 }}>
           <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
 
       <div className="space-y-1">
+        {active.length === 0 && <p className="text-[11px] text-gray-700 italic">No active objectives.</p>}
         {active.map(obj => (
-          <div key={obj.id} className={`flex items-start gap-2 p-1.5 rounded group ${obj.critical ? 'bg-ops-red/5 border border-ops-red/20' : 'hover:bg-bunker-800'}`}>
-            <button
-              onClick={() => onToggle(obj.id)}
-              className="w-4 h-4 rounded border border-bunker-500 hover:border-ops-green flex-shrink-0 mt-0.5 transition-colors"
-            />
+          <div key={obj.id}
+            className={`flex items-start gap-2 p-1.5 rounded group
+              ${obj.critical ? 'bg-ops-red/5 border border-ops-red/20' : 'hover:bg-bunker-800'}`}>
+            <button onClick={() => onToggle(obj.id)}
+              className="w-4 h-4 rounded border border-bunker-500 hover:border-ops-green flex-shrink-0 mt-0.5 transition-colors" />
             <span className="text-xs text-gray-200 flex-1 leading-relaxed">{obj.text}</span>
             {obj.critical && <AlertTriangle className="w-3 h-3 text-ops-red flex-shrink-0 mt-0.5" />}
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => onToggleCritical(obj.id)} className="text-gray-600 hover:text-ops-red transition-colors">
-                <AlertTriangle className="w-3 h-3" />
-              </button>
-              <button onClick={() => onDelete(obj.id)} className="text-gray-600 hover:text-ops-red transition-colors">
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <button onClick={() => onToggleCritical(obj.id)} className="text-gray-600 hover:text-ops-red"><AlertTriangle className="w-3 h-3" /></button>
+              <button onClick={() => onDelete(obj.id)} className="text-gray-600 hover:text-ops-red"><Trash2 className="w-3 h-3" /></button>
             </div>
           </div>
         ))}
-        {active.length === 0 && <p className="text-[11px] text-gray-700 italic">No active objectives.</p>}
       </div>
 
       {done.length > 0 && (
         <div>
-          <button
-            onClick={() => setShowDone(s => !s)}
-            className="text-[10px] text-gray-600 hover:text-gray-400 flex items-center gap-1"
-          >
+          <button onClick={() => setShowDone(s => !s)}
+            className="text-[10px] text-gray-600 hover:text-gray-400 flex items-center gap-1 mb-1">
             <Check className="w-3 h-3" /> {done.length} completed
             {showDone ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {showDone && done.map(obj => (
             <div key={obj.id} className="flex items-center gap-2 p-1.5 opacity-40 group">
-              <button onClick={() => onToggle(obj.id)} className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex-shrink-0 flex items-center justify-center">
+              <button onClick={() => onToggle(obj.id)}
+                className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex items-center justify-center flex-shrink-0">
                 <Check className="w-2.5 h-2.5 text-ops-green" />
               </button>
               <span className="text-xs text-gray-500 flex-1 line-through">{obj.text}</span>
-              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100">
                 <Trash2 className="w-3 h-3 text-gray-600 hover:text-ops-red" />
               </button>
             </div>
@@ -181,165 +190,124 @@ function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCr
   )
 }
 
-// ─── Project / Client / Course Panel ─────────────────────────────────────────
-// Owns the selector + scoped Notes AND Objectives for the active entry only
+// ─── Project / Client / Course / Module Panel ─────────────────────────────────
 
 function ProjectPanel({ card, onUpdateCard, addXp, ts }) {
   const [tab, setTab]       = useState('notes')
   const [newName, setNewName] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-
+  const a = ac(card.accentColor)
   const label    = card.projectLabel || 'Project'
   const projects = card.projects || []
   const activeProj = projects.find(p => p.id === card.activeProjectId) || projects[0]
-  const c = ACCENT_COLORS[card.accentColor] || ACCENT_COLORS.green
+  const activeCount = (activeProj?.objectives || []).filter(o => !o.done).length
 
-  // ── helpers that write only to the active project ──────────────────────
-
-  const updateActiveProj = (fields) => {
-    onUpdateCard({
-      projects: projects.map(p =>
-        p.id === activeProj?.id ? { ...p, ...fields } : p
-      )
-    })
-  }
+  const updateActiveProj = (fields) =>
+    onUpdateCard({ projects: projects.map(p => p.id === activeProj?.id ? { ...p, ...fields } : p) })
 
   const addNote = (text) => {
     updateActiveProj({ notes: [{ id: crypto.randomUUID(), text, at: ts() }, ...(activeProj?.notes || [])] })
-    addXp(5, `${label} note: ${text.slice(0, 30)}`)
+    addXp(5, `${label} note`)
   }
 
   const addObjective = (text, critical) => {
     updateActiveProj({
       objectives: [...(activeProj?.objectives || []),
-        { id: crypto.randomUUID(), text, critical: !!critical, done: false, doneAt: null, at: ts() }
-      ]
+        { id: crypto.randomUUID(), text, critical: !!critical, done: false, doneAt: null, at: ts() }]
     })
-    addXp(5, `${label} objective added`)
+    addXp(5, `${label} objective`)
   }
 
-  const toggleObjective = (id) => {
+  const toggleObj = (id) => {
     const obj = (activeProj?.objectives || []).find(o => o.id === id)
     updateActiveProj({
       objectives: (activeProj?.objectives || []).map(o =>
-        o.id === id ? { ...o, done: !o.done, doneAt: !o.done ? ts() : null } : o
-      )
+        o.id === id ? { ...o, done: !o.done, doneAt: !o.done ? ts() : null } : o)
     })
     if (!obj?.done) addXp(obj?.critical ? 50 : 25, `Done: ${obj?.text?.slice(0, 30)}`)
   }
 
-  const deleteObjective = (id) =>
+  const deleteObj = (id) =>
     updateActiveProj({ objectives: (activeProj?.objectives || []).filter(o => o.id !== id) })
 
   const toggleCritical = (id) =>
-    updateActiveProj({
-      objectives: (activeProj?.objectives || []).map(o =>
-        o.id === id ? { ...o, critical: !o.critical } : o
-      )
-    })
-
-  // ── add / remove entries ───────────────────────────────────────────────
+    updateActiveProj({ objectives: (activeProj?.objectives || []).map(o => o.id === id ? { ...o, critical: !o.critical } : o) })
 
   const addEntry = () => {
     if (!newName.trim()) return
     const id = crypto.randomUUID()
-    onUpdateCard({
-      projects: [...projects, { id, name: newName.trim(), notes: [], objectives: [] }],
-      activeProjectId: id,
-    })
-    setNewName('')
-    setShowAdd(false)
+    onUpdateCard({ projects: [...projects, { id, name: newName.trim(), notes: [], objectives: [] }], activeProjectId: id })
+    setNewName(''); setShowAdd(false)
     addXp(10, `New ${label}: ${newName}`)
   }
 
   const removeEntry = (id) => {
-    const remaining = projects.filter(p => p.id !== id)
-    onUpdateCard({ projects: remaining, activeProjectId: remaining[0]?.id || null })
+    const rest = projects.filter(p => p.id !== id)
+    onUpdateCard({ projects: rest, activeProjectId: rest[0]?.id || null })
   }
-
-  const activeCount = (activeProj?.objectives || []).filter(o => !o.done).length
-
-  // ── render ─────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-3">
-      {/* Selector row */}
+      {/* Selector */}
       <div>
         <label className="ops-label">Active {label}</label>
         <div className="flex gap-2">
-          <select
-            className="ops-input flex-1 text-sm"
+          <select className="ops-input flex-1 text-sm"
             value={card.activeProjectId || ''}
-            onChange={e => { onUpdateCard({ activeProjectId: e.target.value }); setTab('notes') }}
-          >
-            {projects.map(p => (
-              <option key={p.id} value={p.id} className="bg-bunker-800">{p.name}</option>
-            ))}
+            onChange={e => { onUpdateCard({ activeProjectId: e.target.value }); setTab('notes') }}>
+            {projects.map(p => <option key={p.id} value={p.id} className="bg-bunker-800">{p.name}</option>)}
           </select>
-          <button onClick={() => setShowAdd(s => !s)} className="ops-btn-primary flex-shrink-0" title={`Add ${label}`}>
+          <button onClick={() => setShowAdd(s => !s)} title={`Add ${label}`}
+            className="ops-btn border rounded transition-all px-3 py-2"
+            style={{ backgroundColor: a.bg12, color: a.color, borderColor: a.bd30 }}>
             <Plus className="w-3.5 h-3.5" />
           </button>
           {projects.length > 1 && activeProj && (
-            <button onClick={() => removeEntry(activeProj.id)} className="ops-btn-danger flex-shrink-0" title={`Remove ${label}`}>
+            <button onClick={() => removeEntry(activeProj.id)} title={`Remove ${label}`}
+              className="ops-btn-danger rounded px-3 py-2">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-
         {showAdd && (
           <div className="flex gap-2 mt-2">
-            <input
-              className="ops-input flex-1 text-sm"
-              placeholder={`${label} name…`}
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') addEntry(); if (e.key === 'Escape') setShowAdd(false) }}
-            />
-            <button onClick={addEntry} className="ops-btn-primary flex-shrink-0"><Check className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setShowAdd(false)} className="ops-btn-ghost flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+            <input className="ops-input flex-1 text-sm" placeholder={`${label} name…`}
+              value={newName} onChange={e => setNewName(e.target.value)} autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') addEntry(); if (e.key === 'Escape') setShowAdd(false) }} />
+            <button onClick={addEntry} className="ops-btn-primary"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setShowAdd(false)} className="ops-btn-ghost"><X className="w-3.5 h-3.5" /></button>
           </div>
         )}
       </div>
 
-      {/* Scoped tabs — only for the active project/client/course */}
+      {/* Scoped tabs */}
       {activeProj && (
         <>
           <div className="flex border border-bunker-700 rounded overflow-hidden">
-            <button
-              onClick={() => setTab('notes')}
-              className={`flex-1 py-1.5 text-xs font-semibold transition-colors
-                ${tab === 'notes' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
-            >
-              <Clock className="w-3 h-3 inline mr-1" />
-              Notes ({(activeProj.notes || []).length})
-            </button>
-            <button
-              onClick={() => setTab('objectives')}
-              className={`flex-1 py-1.5 text-xs font-semibold transition-colors
-                ${tab === 'objectives' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
-            >
-              <Target className="w-3 h-3 inline mr-1" />
-              Objectives ({activeCount})
-            </button>
+            {[
+              { id: 'notes', icon: Clock, label: `Notes (${(activeProj.notes || []).length})` },
+              { id: 'objectives', icon: Target, label: `Objectives (${activeCount})` },
+            ].map(t => {
+              const TIcon = t.icon
+              const isActive = tab === t.id
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className="flex-1 py-1.5 text-xs font-semibold transition-all flex items-center justify-center gap-1"
+                  style={isActive ? a.activeTab : { color: '#6b7280' }}>
+                  <TIcon className="w-3 h-3" />{t.label}
+                </button>
+              )
+            })}
           </div>
 
           {tab === 'notes' && (
-            <NoteHistory
-              notes={activeProj.notes || []}
-              onAdd={addNote}
-              accentColor={card.accentColor}
-            />
+            <NoteHistory notes={activeProj.notes || []} onAdd={addNote} hex={card.accentColor} />
           )}
-
           {tab === 'objectives' && (
             <CardObjectives
               objectives={activeProj.objectives || []}
-              onAdd={addObjective}
-              onToggle={toggleObjective}
-              onDelete={deleteObjective}
-              onToggleCritical={toggleCritical}
-              accentColor={card.accentColor}
+              onAdd={addObjective} onToggle={toggleObj} onDelete={deleteObj}
+              onToggleCritical={toggleCritical} hex={card.accentColor}
             />
           )}
         </>
@@ -355,29 +323,21 @@ function InlineField({ label, value, onSave, type = 'text', min, max }) {
   const [draft, setDraft] = useState(value)
   const save = () => { onSave(draft); setEditing(false) }
   const cancel = () => { setDraft(value); setEditing(false) }
-
   return (
     <div>
-      <label className="ops-label">{label}</label>
+      {label && <label className="ops-label">{label}</label>}
       {editing ? (
         <div className="flex gap-1">
-          <input
-            type={type} min={min} max={max}
-            className="ops-input flex-1 text-sm"
-            value={draft}
+          <input type={type} min={min} max={max} className="ops-input flex-1 text-sm"
+            value={draft} autoFocus
             onChange={e => setDraft(type === 'number' ? Number(e.target.value) : e.target.value)}
-            autoFocus
-            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
-          />
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }} />
           <button onClick={save} className="ops-btn-primary"><Check className="w-3 h-3" /></button>
           <button onClick={cancel} className="ops-btn-ghost"><X className="w-3 h-3" /></button>
         </div>
       ) : (
-        <div
-          className="flex items-center gap-2 group cursor-pointer"
-          onClick={() => { setDraft(value); setEditing(true) }}
-        >
-          <span className="text-sm text-gray-200">{String(value) || <span className="text-gray-600 italic">—</span>}</span>
+        <div className="flex items-center gap-2 group cursor-pointer" onClick={() => { setDraft(value); setEditing(true) }}>
+          <span className="text-sm text-gray-200">{value !== '' ? String(value) : <span className="text-gray-600 italic">—</span>}</span>
           <Edit3 className="w-3 h-3 text-gray-700 group-hover:text-ops-green transition-colors" />
         </div>
       )}
@@ -387,20 +347,20 @@ function InlineField({ label, value, onSave, type = 'text', min, max }) {
 
 // ─── Add New Card Modal ───────────────────────────────────────────────────────
 
-const ICON_OPTS = ['Network','BookOpen','Shield','Gamepad2','Brain','Briefcase','Code','Database','Globe','Server','Zap','Target','Star','Cpu']
-const COLOR_OPTS = ['green','blue','purple','amber','cyan','lime','red']
-
 function AddCardModal({ onSave, onClose }) {
   const [title, setTitle]   = useState('')
   const [icon, setIcon]     = useState('Star')
-  const [color, setColor]   = useState('green')
+  const [color, setColor]   = useState('#00ff88')
   const [status, setStatus] = useState('Active')
+  const [projLabel, setProjLabel] = useState('Project')
 
   const submit = () => {
     if (!title.trim()) return
-    onSave({ title: title.trim(), icon, accentColor: color, status, hasProjects: false })
+    onSave({ title: title.trim(), icon, accentColor: color, status, projectLabel: projLabel })
     onClose()
   }
+
+  const a = ac(color)
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -410,9 +370,18 @@ function AddCardModal({ onSave, onClose }) {
           <button onClick={onClose}><X className="w-4 h-4 text-gray-500 hover:text-gray-200" /></button>
         </div>
 
-        <div>
-          <label className="ops-label">Title</label>
-          <input className="ops-input" placeholder="e.g. Arista Study, Side Project…" value={title} onChange={e => setTitle(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && submit()} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="ops-label">Title</label>
+            <input className="ops-input" placeholder="e.g. Arista Study…"
+              value={title} onChange={e => setTitle(e.target.value)} autoFocus
+              onKeyDown={e => e.key === 'Enter' && submit()} />
+          </div>
+          <div>
+            <label className="ops-label">Entry Label</label>
+            <input className="ops-input" placeholder="Project / Client / Module…"
+              value={projLabel} onChange={e => setProjLabel(e.target.value)} />
+          </div>
         </div>
 
         <div>
@@ -424,16 +393,14 @@ function AddCardModal({ onSave, onClose }) {
 
         <div>
           <label className="ops-label">Icon</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {ICON_OPTS.map(name => {
               const I = ICON_MAP[name]
+              const active = icon === name
               return (
-                <button
-                  key={name}
-                  onClick={() => setIcon(name)}
-                  className={`p-2 rounded border transition-all ${icon === name ? 'border-ops-green bg-ops-green/10 text-ops-green' : 'border-bunker-600 text-gray-500 hover:border-gray-500'}`}
-                  title={name}
-                >
+                <button key={name} onClick={() => setIcon(name)} title={name}
+                  className="p-2 rounded border transition-all"
+                  style={active ? { backgroundColor: a.bg12, color: a.color, borderColor: a.bd60 } : { borderColor: '#374151', color: '#6b7280' }}>
                   <I className="w-4 h-4" />
                 </button>
               )
@@ -442,22 +409,40 @@ function AddCardModal({ onSave, onClose }) {
         </div>
 
         <div>
-          <label className="ops-label">Color</label>
-          <div className="flex gap-2 flex-wrap">
-            {COLOR_OPTS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`w-7 h-7 rounded-full border-2 transition-all ${ACCENT_COLORS[c]?.dot || 'bg-gray-500'} ${color === c ? 'border-white scale-110' : 'border-transparent'}`}
-                title={c}
-              />
+          <label className="ops-label">Accent Color</label>
+          <div className="flex items-center gap-3">
+            <input type="color" value={color} onChange={e => setColor(e.target.value)}
+              className="w-10 h-10 rounded cursor-pointer border border-bunker-600 bg-transparent" />
+            <div className="flex-1 h-8 rounded border border-bunker-600 transition-all"
+              style={{ backgroundColor: a.bg12, borderColor: a.bd30 }} />
+            <span className="text-xs text-gray-500 font-mono w-16">{color}</span>
+          </div>
+          {/* Quick presets */}
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {['#00ff88','#38bdf8','#a78bfa','#f59e0b','#22d3ee','#a3e635','#ef4444','#f97316','#ec4899','#6366f1','#14b8a6','#eab308'].map(h => (
+              <button key={h} onClick={() => setColor(h)}
+                className={`w-6 h-6 rounded-full border-2 transition-all`}
+                style={{ backgroundColor: h, borderColor: color === h ? 'white' : 'transparent',
+                  transform: color === h ? 'scale(1.2)' : 'scale(1)' }} />
             ))}
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div className="rounded border-l-4 p-3 bg-bunker-800" style={a.cardBorder}>
+          <div className="flex items-center gap-2">
+            {(() => { const I = ICON_MAP[icon] || Star; return <I className="w-4 h-4" style={a.text} /> })()}
+            <span className="text-sm font-bold text-gray-100">{title || 'Card Preview'}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full border ml-auto" style={a.pill}>{status}</span>
           </div>
         </div>
 
         <div className="flex gap-2 pt-1">
           <button onClick={onClose} className="ops-btn-ghost flex-1">Cancel</button>
-          <button onClick={submit} className="ops-btn-primary flex-1">Create Card</button>
+          <button onClick={submit} className="ops-btn flex-1 border rounded transition-all py-2 font-semibold text-xs"
+            style={{ backgroundColor: a.bg12, color: a.color, borderColor: a.bd30 }}>
+            Create Card
+          </button>
         </div>
       </div>
     </div>
@@ -467,56 +452,35 @@ function AddCardModal({ onSave, onClose }) {
 // ─── Individual SITREP Card ───────────────────────────────────────────────────
 
 function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
-  const [tab, setTab] = useState('notes') // 'notes' | 'objectives'
   const [collapsed, setCollapsed] = useState(card.collapsed || false)
-  const c = ACCENT_COLORS[card.accentColor] || ACCENT_COLORS.green
+  const a = ac(card.accentColor)
   const Icon = ICON_MAP[card.icon] || Star
 
   const set = (fields) => onUpdate({ ...card, ...fields })
 
-  const addNote = (text) => {
-    set({ notes: [{ id: crypto.randomUUID(), text, at: ts() }, ...(card.notes || [])] })
-    addXp(5, `Note on ${card.title}`)
-  }
-
-  const addObjective = (text, critical) => {
-    set({ objectives: [...(card.objectives || []), { id: crypto.randomUUID(), text, critical: !!critical, done: false, doneAt: null, at: ts() }] })
-    addXp(5, `Objective on ${card.title}`)
-  }
-
-  const toggleObjective = (id) => {
-    const obj = (card.objectives || []).find(o => o.id === id)
-    set({ objectives: (card.objectives || []).map(o => o.id === id ? { ...o, done: !o.done, doneAt: !o.done ? ts() : null } : o) })
-    if (!obj?.done) addXp(obj?.critical ? 50 : 25, `Objective done: ${obj?.text?.slice(0, 30)}`)
-  }
-
-  const deleteObjective = (id) => set({ objectives: (card.objectives || []).filter(o => o.id !== id) })
-  const toggleCritical  = (id) => set({ objectives: (card.objectives || []).map(o => o.id === id ? { ...o, critical: !o.critical } : o) })
-
-  // For hasProjects cards the objective count spans ALL projects (badge on header)
-  const activeCount = card.hasProjects
-    ? (card.projects || []).flatMap(p => p.objectives || []).filter(o => !o.done).length
-    : (card.objectives || []).filter(o => !o.done).length
+  // Active objective count — always from projects since all cards have hasProjects now
+  const activeCount = (card.projects || [])
+    .flatMap(p => p.objectives || [])
+    .filter(o => !o.done).length
 
   return (
-    <div className={`bg-bunker-900 border border-bunker-700 border-l-4 ${c.border} rounded-lg overflow-hidden`}>
-      {/* Card header */}
+    <div className="bg-bunker-900 border border-bunker-700 rounded-lg overflow-hidden" style={a.cardBorder}>
+
+      {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-bunker-800">
-        <Icon className={`w-4 h-4 flex-shrink-0 ${c.text}`} />
+        <Icon className="w-4 h-4 flex-shrink-0" style={a.text} />
         <span className="text-sm font-bold text-gray-100 flex-1 truncate">{card.title}</span>
 
-        {/* Status badge — clickable to cycle */}
+        {/* Status — hover to change */}
         <div className="relative group">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border cursor-pointer select-none ${STATUS_COLORS[card.status] || STATUS_COLORS['Active']}`}>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border cursor-pointer select-none
+            ${STATUS_COLORS[card.status] || STATUS_COLORS['Active']}`}>
             {card.status}
           </span>
-          <div className="absolute right-0 top-6 z-10 hidden group-hover:block bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[120px] shadow-xl">
+          <div className="absolute right-0 top-6 z-20 hidden group-hover:block bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[120px] shadow-xl">
             {STATUS_OPTS.map(s => (
-              <button
-                key={s}
-                onClick={() => set({ status: s })}
-                className="block w-full text-left px-3 py-1 text-xs text-gray-300 hover:bg-bunker-700 transition-colors"
-              >
+              <button key={s} onClick={() => set({ status: s })}
+                className="block w-full text-left px-3 py-1 text-xs text-gray-300 hover:bg-bunker-700">
                 {s}
               </button>
             ))}
@@ -524,13 +488,24 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
         </div>
 
         {activeCount > 0 && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.pill} border ml-1`}>{activeCount} obj</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded border ml-1" style={a.pill}>
+            {activeCount} obj
+          </span>
         )}
 
-        <button onClick={() => { setCollapsed(col => !col); set({ collapsed: !collapsed }) }} className="text-gray-600 hover:text-gray-300 transition-colors ml-1">
+        {/* Accent color picker — right on the card header */}
+        <div className="relative group/cp" title="Change color">
+          <div className="w-4 h-4 rounded-full border border-bunker-600 cursor-pointer hover:scale-110 transition-transform"
+            style={{ backgroundColor: card.accentColor }} />
+          <input type="color" value={card.accentColor}
+            onChange={e => set({ accentColor: e.target.value })}
+            className="absolute inset-0 opacity-0 cursor-pointer w-4 h-4" />
+        </div>
+
+        <button onClick={() => { const c = !collapsed; setCollapsed(c); set({ collapsed: c }) }}
+          className="text-gray-600 hover:text-gray-300 transition-colors">
           {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
         </button>
-
         <button onClick={() => onDelete(card.id)} className="text-gray-700 hover:text-ops-red transition-colors" title="Remove card">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -538,124 +513,88 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
 
       {!collapsed && (
         <div className="p-4 space-y-4">
-          {/* Boeing-specific fields */}
+
+          {/* Boeing static fields */}
           {card.id === 'boeing' && (
-            <div className="grid grid-cols-2 gap-3 pb-2 border-b border-bunker-800">
-              <div><label className="ops-label">Role</label><p className="text-sm text-gray-200">{card.role}</p></div>
-              <div><label className="ops-label">L3 Advocate</label><p className={`text-sm font-semibold ${c.text}`}>{card.l3}</p></div>
+            <div className="grid grid-cols-2 gap-3 pb-3 border-b border-bunker-800">
+              <div><label className="ops-label">Role</label><p className="text-sm text-gray-300">{card.role}</p></div>
+              <div>
+                <label className="ops-label">L3 Advocate</label>
+                <p className="text-sm font-semibold" style={a.text}>{card.l3}</p>
+              </div>
             </div>
           )}
 
-          {/* WGU-specific fields — program, term days, CUs (course is handled by ProjectPanel as Course selector) */}
+          {/* WGU — program, CUs, term days (course is in ProjectPanel) */}
           {card.id === 'wgu' && (
-            <div className="space-y-3 pb-2 border-b border-bunker-800">
+            <div className="space-y-3 pb-3 border-b border-bunker-800">
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="ops-label">Program</label><p className="text-sm text-gray-300">{card.program}</p></div>
                 <div>
                   <label className="ops-label">Days Left in Term</label>
-                  <InlineField label="" value={card.daysLeftInTerm} type="number" min={0} max={365}
-                    onSave={v => { set({ daysLeftInTerm: Number(v) }); addXp(3, 'Updated WGU term days') }} />
+                  <InlineField value={card.daysLeftInTerm} type="number" min={0} max={365}
+                    onSave={v => { set({ daysLeftInTerm: Number(v) }); addXp(3, 'WGU term days') }} />
                 </div>
               </div>
               <div>
                 <label className="ops-label">Credit Units — {card.completedCUs} / {card.totalCUs}</label>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="flex-1 h-2.5 bg-bunker-700 rounded-full overflow-hidden">
-                    <div className={`h-full ${c.dot} rounded-full xp-bar-fill`} style={{ width: `${Math.min((card.completedCUs/card.totalCUs)*100, 100)}%` }} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <InlineField label="" value={card.completedCUs} type="number" min={0} max={card.totalCUs}
-                      onSave={v => { set({ completedCUs: Number(v) }); addXp(10, 'Updated WGU CUs completed') }} />
-                    <span className="text-gray-600 text-sm">/</span>
-                    <InlineField label="" value={card.totalCUs} type="number" min={1}
-                      onSave={v => set({ totalCUs: Number(v) })} />
-                  </div>
+                <div className="h-2 bg-bunker-700 rounded-full overflow-hidden my-1.5">
+                  <div className="h-full rounded-full xp-bar-fill" style={{ ...a.bar, width: `${Math.min((card.completedCUs / card.totalCUs) * 100, 100)}%` }} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <InlineField value={card.completedCUs} type="number" min={0}
+                    onSave={v => { set({ completedCUs: Number(v) }); addXp(10, 'WGU CUs updated') }} />
+                  <span className="text-gray-600 text-sm">/</span>
+                  <InlineField value={card.totalCUs} type="number" min={1}
+                    onSave={v => set({ totalCUs: Number(v) })} />
+                  <span className="text-xs text-gray-600">CUs</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* GDQuest-specific */}
+          {/* GameDev static fields */}
+          {card.id === 'gamedev' && (
+            <div className="pb-3 border-b border-bunker-800">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="ops-label">Engine</label><p className="text-sm text-gray-300">{card.engine}</p></div>
+                <InlineField label="Current Milestone" value={card.currentMilestone || ''}
+                  onSave={v => { set({ currentMilestone: v }); addXp(5, 'GameDev milestone') }} />
+              </div>
+            </div>
+          )}
+
+          {/* GDQuest — overall progress slider (module is in ProjectPanel) */}
           {card.id === 'gdquest' && (
-            <div className="space-y-2 pb-2 border-b border-bunker-800">
-              <InlineField label="Current Lesson" value={card.currentLesson || ''}
-                onSave={v => { set({ currentLesson: v }); addXp(3, 'Updated GDQuest lesson') }} />
-              <div>
-                <label className="ops-label">Progress — {card.progressPercent || 0}%</label>
-                <div className="h-2.5 bg-bunker-700 rounded-full overflow-hidden mb-1">
-                  <div className={`h-full ${c.dot} rounded-full xp-bar-fill`} style={{ width: `${card.progressPercent || 0}%` }} />
-                </div>
-                <input type="range" min="0" max="100"
-                  value={card.progressPercent || 0}
-                  onChange={e => set({ progressPercent: Number(e.target.value) })}
-                  className="w-full accent-ops-lime" />
+            <div className="pb-3 border-b border-bunker-800">
+              <label className="ops-label">Overall Course Progress — {card.progressPercent || 0}%</label>
+              <div className="h-2 bg-bunker-700 rounded-full overflow-hidden my-1.5">
+                <div className="h-full rounded-full xp-bar-fill" style={{ ...a.bar, width: `${card.progressPercent || 0}%` }} />
               </div>
+              <input type="range" min="0" max="100" value={card.progressPercent || 0}
+                onChange={e => set({ progressPercent: Number(e.target.value) })}
+                className="w-full" style={{ accentColor: card.accentColor }} />
             </div>
           )}
 
-          {/* Safe Days-specific */}
+          {/* Safe Days tagline */}
           {card.id === 'safedays' && (
-            <div className="pb-2 border-b border-bunker-800">
+            <div className="pb-3 border-b border-bunker-800">
               <label className="ops-label">Tagline</label>
               <p className="text-xs text-gray-400">{card.tagline}</p>
             </div>
           )}
 
-          {/* GameDev-specific */}
-          {card.id === 'gamedev' && (
-            <div className="pb-2 border-b border-bunker-800">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="ops-label">Engine</label><p className="text-sm text-gray-200">{card.engine}</p></div>
-                <InlineField label="Current Milestone" value={card.currentMilestone || ''}
-                  onSave={v => { set({ currentMilestone: v }); addXp(5, 'GameDev milestone updated') }} />
-              </div>
+          {/* Custom card subtitle */}
+          {!['boeing','wgu','gdquest','safedays','gamedev'].includes(card.id) && card.subtitle !== undefined && (
+            <div className="pb-3 border-b border-bunker-800">
+              <InlineField label="Detail" value={card.subtitle || ''}
+                onSave={v => set({ subtitle: v })} />
             </div>
           )}
 
-          {/* Custom card editable title */}
-          {!['boeing','wgu','gdquest','safedays','gamedev'].includes(card.id) && (
-            <InlineField label="Status Detail" value={card.subtitle || ''}
-              onSave={v => set({ subtitle: v })} />
-          )}
-
-          {/* Project / Client / Course panel — owns Notes + Objectives when hasProjects */}
-          {card.hasProjects ? (
-            <ProjectPanel card={card} onUpdateCard={(fields) => set(fields)} addXp={addXp} ts={ts} />
-          ) : (
-            <>
-              {/* Card-level Notes | Objectives — only for cards without projects */}
-              <div className="flex border border-bunker-700 rounded overflow-hidden">
-                <button
-                  onClick={() => setTab('notes')}
-                  className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'notes' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
-                >
-                  <Clock className="w-3 h-3 inline mr-1" />
-                  Notes ({(card.notes || []).length})
-                </button>
-                <button
-                  onClick={() => setTab('objectives')}
-                  className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'objectives' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
-                >
-                  <Target className="w-3 h-3 inline mr-1" />
-                  Objectives ({activeCount})
-                </button>
-              </div>
-
-              {tab === 'notes' && (
-                <NoteHistory notes={card.notes || []} onAdd={addNote} accentColor={card.accentColor} />
-              )}
-              {tab === 'objectives' && (
-                <CardObjectives
-                  objectives={card.objectives || []}
-                  onAdd={addObjective}
-                  onToggle={toggleObjective}
-                  onDelete={deleteObjective}
-                  onToggleCritical={toggleCritical}
-                  accentColor={card.accentColor}
-                />
-              )}
-            </>
-          )}
+          {/* Project / Client / Course / Module panel — all cards */}
+          <ProjectPanel card={card} onUpdateCard={(fields) => set(fields)} addXp={addXp} ts={ts} />
         </div>
       )}
     </div>
@@ -670,48 +609,48 @@ export default function Sitrep() {
   const [showAddModal, setShowAddModal] = useState(false)
   const now = new Date()
 
-  const updateCard = (updatedCard) => {
-    update(s => {
-      s.sitrep.cards = s.sitrep.cards.map(c => c.id === updatedCard.id ? updatedCard : c)
-    })
-  }
+  const updateCard = (updated) =>
+    update(s => { s.sitrep.cards = s.sitrep.cards.map(c => c.id === updated.id ? updated : c) })
 
   const deleteCard = (id) => {
-    if (!confirm('Remove this card from SITREP?')) return
+    if (!confirm('Remove this card?')) return
     update(s => { s.sitrep.cards = s.sitrep.cards.filter(c => c.id !== id) })
   }
 
   const addCard = (fields) => {
-    const newCard = {
-      id: crypto.randomUUID(),
-      order: cards.length,
-      collapsed: false,
-      notes: [],
-      objectives: [],
-      projects: fields.hasProjects ? [] : undefined,
-      activeProjectId: null,
-      ...fields,
-    }
-    update(s => { s.sitrep.cards = [...s.sitrep.cards, newCard] })
+    const id = crypto.randomUUID()
+    update(s => {
+      s.sitrep.cards = [...s.sitrep.cards, {
+        id,
+        order: s.sitrep.cards.length,
+        collapsed: false,
+        hasProjects: true,
+        activeProjectId: `${id}-p1`,
+        projects: [{ id: `${id}-p1`, name: `First ${fields.projectLabel || 'Project'}`, notes: [], objectives: [] }],
+        notes: [],
+        objectives: [],
+        ...fields,
+      }]
+    })
     addXp(15, `New SITREP card: ${fields.title}`)
   }
 
-  // All active objectives — from project objectives for hasProjects cards, card-level for others
-  const allActiveObj = cards.flatMap(c => {
-    if (c.hasProjects) {
-      return (c.projects || []).flatMap(p =>
-        (p.objectives || []).filter(o => !o.done).map(o => ({
-          ...o,
-          cardTitle: c.title,
-          projectName: p.name,
-          cardColor: c.accentColor,
-        }))
-      )
-    }
-    return (c.objectives || []).filter(o => !o.done).map(o => ({
-      ...o, cardTitle: c.title, cardColor: c.accentColor,
-    }))
-  })
+  // Flatten all active objectives across every card + all their projects
+  const allActiveObj = cards.flatMap(c =>
+    (c.projects || []).flatMap(p =>
+      (p.objectives || []).filter(o => !o.done).map(o => ({
+        ...o,
+        cardTitle: c.title,
+        projectName: p.name,
+        cardHex: c.accentColor,
+      }))
+    ).concat(
+      // Also include card-level objectives for any card that somehow has them
+      (c.objectives || []).filter(o => !o.done).map(o => ({
+        ...o, cardTitle: c.title, projectName: null, cardHex: c.accentColor,
+      }))
+    )
+  )
   const criticalObj = allActiveObj.filter(o => o.critical)
 
   return (
@@ -729,32 +668,27 @@ export default function Sitrep() {
         </button>
       </div>
 
-      {/* Critical objectives strip */}
+      {/* Critical strip */}
       {criticalObj.length > 0 && (
-        <div className="flex flex-wrap gap-2 p-3 bg-ops-red/5 border border-ops-red/30 rounded-lg">
-          <div className="flex items-center gap-1.5 w-full mb-1">
+        <div className="p-3 bg-ops-red/5 border border-ops-red/30 rounded-lg space-y-2">
+          <div className="flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-ops-red" />
             <span className="text-[10px] text-ops-red uppercase tracking-wider font-semibold">Critical Objectives</span>
           </div>
-          {criticalObj.map(o => (
-            <div key={o.id} className="text-[11px] px-2 py-0.5 rounded border border-ops-red/40 bg-ops-red/10 text-ops-red">
-              <span className="text-gray-500">[{o.cardTitle}{o.projectName ? ` / ${o.projectName}` : ''}]</span> {o.text}
-            </div>
-          ))}
+          <div className="flex flex-wrap gap-2">
+            {criticalObj.map(o => (
+              <div key={o.id} className="text-[11px] px-2 py-0.5 rounded border border-ops-red/40 bg-ops-red/10 text-ops-red">
+                <span className="opacity-60">[{o.cardTitle}{o.projectName ? ` / ${o.projectName}` : ''}]</span> {o.text}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Cards grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {cards.map(card => (
-          <SitrepCard
-            key={card.id}
-            card={card}
-            onUpdate={updateCard}
-            onDelete={deleteCard}
-            addXp={addXp}
-            ts={ts}
-          />
+          <SitrepCard key={card.id} card={card} onUpdate={updateCard} onDelete={deleteCard} addXp={addXp} ts={ts} />
         ))}
       </div>
 
@@ -765,26 +699,25 @@ export default function Sitrep() {
         </div>
       )}
 
-      {/* Active objectives summary */}
+      {/* All active objectives summary */}
       {allActiveObj.length > 0 && (
         <div className="ops-card">
-          <div className="section-title mb-3">
+          <div className="flex items-center gap-2 mb-3">
             <Target className="w-3.5 h-3.5 text-ops-green" />
-            All Active Objectives
-            <span className="ml-auto text-[10px] text-gray-600">{allActiveObj.length} across {cards.filter(c => (c.objectives||[]).some(o=>!o.done)).length} cards</span>
+            <span className="text-xs text-gray-500 uppercase tracking-widest">All Active Objectives</span>
+            <span className="ml-auto text-[10px] text-gray-600">{allActiveObj.length} total</span>
           </div>
           <div className="space-y-1">
-            {allActiveObj.map(o => {
-              const c = ACCENT_COLORS[o.cardColor] || ACCENT_COLORS.green
-              return (
-                <div key={o.id} className={`flex items-center gap-2 text-xs p-1.5 rounded ${o.critical ? 'bg-ops-red/5' : ''}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
-                  <span className="text-gray-500 flex-shrink-0">[{o.cardTitle}{o.projectName ? ` / ${o.projectName}` : ''}]</span>
-                  <span className="text-gray-200 flex-1">{o.text}</span>
-                  {o.critical && <AlertTriangle className="w-3 h-3 text-ops-red flex-shrink-0" />}
-                </div>
-              )
-            })}
+            {allActiveObj.map(o => (
+              <div key={o.id} className={`flex items-center gap-2 text-xs p-1.5 rounded ${o.critical ? 'bg-ops-red/5' : ''}`}>
+                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: o.cardHex }} />
+                <span className="text-gray-500 flex-shrink-0">
+                  [{o.cardTitle}{o.projectName ? ` / ${o.projectName}` : ''}]
+                </span>
+                <span className="text-gray-200 flex-1">{o.text}</span>
+                {o.critical && <AlertTriangle className="w-3 h-3 text-ops-red flex-shrink-0" />}
+              </div>
+            ))}
           </div>
         </div>
       )}
