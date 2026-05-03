@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+body {
+  @apply bg-bunker-950 text-gray-100 font-mono;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-bunker-900; }
+::-webkit-scrollbar-thumb { @apply bg-bunker-600 rounded; }
+::-webkit-scrollbar-thumb:hover { @apply bg-ops-green; }
+
+.ops-card {
+  @apply bg-bunker-900 border border-bunker-600 rounded-lg p-4;
+}
+
+.ops-card-glow {
+  @apply bg-bunker-900 border border-ops-green/30 rounded-lg p-4;
+  box-shadow: 0 0 12px rgba(0,255,136,0.06);
+}
+
+.ops-btn {
+  @apply px-3 py-1.5 rounded text-xs font-semibold transition-all duration-150 cursor-pointer;
+}
+
+.ops-btn-primary {
+  @apply ops-btn bg-ops-green/20 border border-ops-green/50 text-ops-green hover:bg-ops-green/30 hover:border-ops-green;
+}
+
+.ops-btn-danger {
+  @apply ops-btn bg-ops-red/20 border border-ops-red/50 text-ops-red hover:bg-ops-red/30;
+}
+
+.ops-btn-ghost {
+  @apply ops-btn bg-transparent border border-bunker-600 text-gray-400 hover:border-gray-400 hover:text-gray-200;
+}
+
+.ops-input {
+  @apply bg-bunker-800 border border-bunker-600 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-ops-green/60 transition-colors w-full;
+}
+
+.ops-textarea {
+  @apply ops-input resize-none;
+}
+
+.ops-label {
+  @apply text-xs text-gray-500 uppercase tracking-wider mb-1 block;
+}
+
+.section-title {
+  @apply text-xs text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2;
+}
+
+.xp-bar-fill {
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+.critical-pulse {
+  animation: critPulse 2s ease-in-out infinite;
+}
+@keyframes critPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+.status-dot {
+  @apply inline-block w-2 h-2 rounded-full;
+}
