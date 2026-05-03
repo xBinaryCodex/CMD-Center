@@ -1,307 +1,708 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
+import { buildDefaultCards } from '../store/useStore'
 import {
-  Network, BookOpen, Shield, Gamepad2, Brain,
-  Edit3, Check, X, AlertTriangle, Target, Plus, Trash2, ChevronDown, ChevronUp
+  Network, BookOpen, Shield, Gamepad2, Brain, Briefcase, Code,
+  Database, Globe, Server, Zap, Target, Star, Cpu, Plus,
+  ChevronDown, ChevronUp, Check, X, Edit3, Trash2, Save,
+  Clock, AlertTriangle, RotateCcw
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 
-function EditableBlock({ label, value, onSave, multiline }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
-  const save = () => { onSave(draft); setEditing(false) }
-  const cancel = () => { setDraft(value); setEditing(false) }
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const ACCENT_COLORS = {
+  blue:   { border: 'border-l-ops-blue',   text: 'text-ops-blue',   pill: 'bg-ops-blue/15 text-ops-blue border-ops-blue/40',   dot: 'bg-ops-blue'   },
+  green:  { border: 'border-l-ops-green',  text: 'text-ops-green',  pill: 'bg-ops-green/15 text-ops-green border-ops-green/40',  dot: 'bg-ops-green'  },
+  purple: { border: 'border-l-ops-purple', text: 'text-ops-purple', pill: 'bg-ops-purple/15 text-ops-purple border-ops-purple/40', dot: 'bg-ops-purple' },
+  amber:  { border: 'border-l-ops-amber',  text: 'text-ops-amber',  pill: 'bg-ops-amber/15 text-ops-amber border-ops-amber/40',  dot: 'bg-ops-amber'  },
+  cyan:   { border: 'border-l-ops-cyan',   text: 'text-ops-cyan',   pill: 'bg-ops-cyan/15 text-ops-cyan border-ops-cyan/40',    dot: 'bg-ops-cyan'   },
+  lime:   { border: 'border-l-ops-lime',   text: 'text-ops-lime',   pill: 'bg-ops-lime/15 text-ops-lime border-ops-lime/40',    dot: 'bg-ops-lime'   },
+  red:    { border: 'border-l-ops-red',    text: 'text-ops-red',    pill: 'bg-ops-red/15 text-ops-red border-ops-red/40',       dot: 'bg-ops-red'    },
+}
+
+const ICON_MAP = {
+  Network: Network, BookOpen: BookOpen, Shield: Shield, Gamepad2: Gamepad2,
+  Brain: Brain, Briefcase: Briefcase, Code: Code, Database: Database,
+  Globe: Globe, Server: Server, Zap: Zap, Target: Target, Star: Star, Cpu: Cpu,
+}
+
+const STATUS_OPTS = ['Active','In Progress','On Hold','Planned','Completed','In Dev','Paused']
+const STATUS_COLORS = {
+  'Active':      'bg-ops-green/15 text-ops-green border-ops-green/40',
+  'In Progress': 'bg-ops-amber/15 text-ops-amber border-ops-amber/40',
+  'In Dev':      'bg-ops-amber/15 text-ops-amber border-ops-amber/40',
+  'On Hold':     'bg-gray-500/15 text-gray-400 border-gray-500/40',
+  'Paused':      'bg-gray-500/15 text-gray-400 border-gray-500/40',
+  'Planned':     'bg-ops-blue/15 text-ops-blue border-ops-blue/40',
+  'Completed':   'bg-ops-green/15 text-ops-green border-ops-green/40',
+}
+
+// ─── Note History ─────────────────────────────────────────────────────────────
+
+function NoteHistory({ notes = [], onAdd, accentColor = 'green', compact }) {
+  const [text, setText] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const c = ACCENT_COLORS[accentColor] || ACCENT_COLORS.green
+  const visible = showAll ? notes : notes.slice(0, 3)
+
+  const submit = () => {
+    if (!text.trim()) return
+    onAdd(text.trim())
+    setText('')
+  }
+
   return (
-    <div>
-      <span className="ops-label">{label}</span>
-      {editing ? (
-        <div className="flex gap-1 items-start">
-          {multiline
-            ? <textarea className="ops-textarea text-sm flex-1 min-h-[60px]" value={draft} onChange={e => setDraft(e.target.value)} autoFocus />
-            : <input className="ops-input text-sm flex-1" value={draft} onChange={e => setDraft(e.target.value)} autoFocus onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }} />
-          }
-          <button onClick={save} className="ops-btn-primary mt-0.5"><Check className="w-3 h-3" /></button>
-          <button onClick={cancel} className="ops-btn-ghost mt-0.5"><X className="w-3 h-3" /></button>
-        </div>
-      ) : (
-        <div
-          className="flex items-start justify-between gap-2 group cursor-pointer"
-          onClick={() => { setDraft(value); setEditing(true) }}
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <textarea
+          className="ops-textarea flex-1 min-h-[52px] text-sm"
+          placeholder="Add a note… (timestamps automatically)"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) submit() }}
+        />
+        <button onClick={submit} className="ops-btn-primary flex-shrink-0 self-end px-3 py-2">
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {notes.length === 0 && (
+        <p className="text-[11px] text-gray-700 italic">No notes yet — add above.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {visible.map((n, i) => (
+          <div key={n.id} className={`rounded p-2 border-l-2 bg-bunker-800 ${c.border.replace('border-l-', 'border-l-')}`}>
+            <p className="text-xs text-gray-200 whitespace-pre-wrap leading-relaxed">{n.text}</p>
+            <p className="text-[9px] text-gray-600 mt-1">{format(parseISO(n.at), 'EEE MMM d, yyyy · HH:mm')}</p>
+          </div>
+        ))}
+      </div>
+
+      {notes.length > 3 && (
+        <button
+          onClick={() => setShowAll(s => !s)}
+          className="text-[10px] text-gray-600 hover:text-gray-300 flex items-center gap-1 transition-colors"
         >
-          <span className="text-sm text-gray-200 leading-relaxed">{value || <span className="text-gray-600 italic">Click to edit…</span>}</span>
-          <Edit3 className="w-3 h-3 text-gray-600 group-hover:text-ops-green flex-shrink-0 mt-0.5 transition-colors" />
+          {showAll
+            ? <><ChevronUp className="w-3 h-3" /> Show less</>
+            : <><ChevronDown className="w-3 h-3" /> Show {notes.length - 3} older notes</>
+          }
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Per-card Objectives ──────────────────────────────────────────────────────
+
+function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCritical, accentColor }) {
+  const [text, setText] = useState('')
+  const [critical, setCritical] = useState(false)
+  const active = objectives.filter(o => !o.done)
+  const done   = objectives.filter(o =>  o.done)
+  const [showDone, setShowDone] = useState(false)
+
+  const submit = () => {
+    if (!text.trim()) return
+    onAdd(text.trim(), critical)
+    setText('')
+    setCritical(false)
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          className="ops-input flex-1 text-sm"
+          placeholder="Add objective…"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submit()}
+        />
+        <button
+          onClick={() => setCritical(c => !c)}
+          title="Mark critical"
+          className={`ops-btn flex-shrink-0 border ${critical ? 'bg-ops-red/20 border-ops-red/60 text-ops-red' : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}
+        >
+          <AlertTriangle className="w-3 h-3" />
+        </button>
+        <button onClick={submit} className="ops-btn-primary flex-shrink-0">
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        {active.map(obj => (
+          <div key={obj.id} className={`flex items-start gap-2 p-1.5 rounded group ${obj.critical ? 'bg-ops-red/5 border border-ops-red/20' : 'hover:bg-bunker-800'}`}>
+            <button
+              onClick={() => onToggle(obj.id)}
+              className="w-4 h-4 rounded border border-bunker-500 hover:border-ops-green flex-shrink-0 mt-0.5 transition-colors"
+            />
+            <span className="text-xs text-gray-200 flex-1 leading-relaxed">{obj.text}</span>
+            {obj.critical && <AlertTriangle className="w-3 h-3 text-ops-red flex-shrink-0 mt-0.5" />}
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => onToggleCritical(obj.id)} className="text-gray-600 hover:text-ops-red transition-colors">
+                <AlertTriangle className="w-3 h-3" />
+              </button>
+              <button onClick={() => onDelete(obj.id)} className="text-gray-600 hover:text-ops-red transition-colors">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        ))}
+        {active.length === 0 && <p className="text-[11px] text-gray-700 italic">No active objectives.</p>}
+      </div>
+
+      {done.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowDone(s => !s)}
+            className="text-[10px] text-gray-600 hover:text-gray-400 flex items-center gap-1"
+          >
+            <Check className="w-3 h-3" /> {done.length} completed
+            {showDone ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          {showDone && done.map(obj => (
+            <div key={obj.id} className="flex items-center gap-2 p-1.5 opacity-40 group">
+              <button onClick={() => onToggle(obj.id)} className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex-shrink-0 flex items-center justify-center">
+                <Check className="w-2.5 h-2.5 text-ops-green" />
+              </button>
+              <span className="text-xs text-gray-500 flex-1 line-through">{obj.text}</span>
+              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Trash2 className="w-3 h-3 text-gray-600 hover:text-ops-red" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function StatusPill({ status }) {
-  const map = {
-    'In Progress': 'bg-ops-amber/20 text-ops-amber border-ops-amber/40',
-    'Active': 'bg-ops-green/20 text-ops-green border-ops-green/40',
-    'Planned': 'bg-ops-blue/20 text-ops-blue border-ops-blue/40',
-    'Paused': 'bg-gray-500/20 text-gray-400 border-gray-500/40',
-  }
-  return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${map[status] || map['Active']}`}>
-      {status}
-    </span>
-  )
-}
+// ─── Project Selector (Boeing / GameDev etc) ─────────────────────────────────
 
-function SitrepCard({ icon: Icon, color, title, status, children, xpBadge }) {
-  const [open, setOpen] = useState(true)
+function ProjectPanel({ card, onUpdateCard, addXp, ts }) {
+  const [newName, setNewName] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
+  const projects = card.projects || []
+  const activeProj = projects.find(p => p.id === card.activeProjectId) || projects[0]
+
+  const addProject = () => {
+    if (!newName.trim()) return
+    const id = crypto.randomUUID()
+    onUpdateCard({ projects: [...projects, { id, name: newName.trim(), notes: [] }], activeProjectId: id })
+    setNewName('')
+    setShowAdd(false)
+    addXp(10, `New project: ${newName}`)
+  }
+
+  const removeProject = (id) => {
+    const remaining = projects.filter(p => p.id !== id)
+    onUpdateCard({
+      projects: remaining,
+      activeProjectId: remaining[0]?.id || null
+    })
+  }
+
+  const addNote = (projId, text) => {
+    onUpdateCard({
+      projects: projects.map(p =>
+        p.id === projId
+          ? { ...p, notes: [{ id: crypto.randomUUID(), text, at: ts() }, ...(p.notes || [])] }
+          : p
+      )
+    })
+    addXp(5, `Project note: ${text.slice(0, 30)}`)
+  }
+
   return (
-    <div className={`ops-card border-l-2 ${color}`}>
-      <div className="flex items-center justify-between mb-3 cursor-pointer" onClick={() => setOpen(o => !o)}>
-        <div className="flex items-center gap-2">
-          <Icon className={`w-4 h-4 ${color.replace('border-', 'text-')}`} />
-          <span className="text-sm font-semibold text-gray-100">{title}</span>
-          {status && <StatusPill status={status} />}
+    <div className="space-y-3">
+      {/* Project selector */}
+      <div>
+        <label className="ops-label">Active Project</label>
+        <div className="flex gap-2">
+          <select
+            className="ops-input flex-1 text-sm"
+            value={card.activeProjectId || ''}
+            onChange={e => onUpdateCard({ activeProjectId: e.target.value })}
+          >
+            {projects.map(p => (
+              <option key={p.id} value={p.id} className="bg-bunker-800">{p.name}</option>
+            ))}
+          </select>
+          <button onClick={() => setShowAdd(s => !s)} className="ops-btn-primary flex-shrink-0" title="Add project">
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          {projects.length > 1 && activeProj && (
+            <button
+              onClick={() => removeProject(activeProj.id)}
+              className="ops-btn-danger flex-shrink-0"
+              title="Remove this project"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {xpBadge && <span className="text-[10px] text-ops-amber">+{xpBadge} XP</span>}
-          {open ? <ChevronUp className="w-3 h-3 text-gray-600" /> : <ChevronDown className="w-3 h-3 text-gray-600" />}
-        </div>
+        {showAdd && (
+          <div className="flex gap-2 mt-2">
+            <input
+              className="ops-input flex-1 text-sm"
+              placeholder="Project name…"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') addProject(); if (e.key === 'Escape') setShowAdd(false) }}
+            />
+            <button onClick={addProject} className="ops-btn-primary flex-shrink-0"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setShowAdd(false)} className="ops-btn-ghost flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        )}
       </div>
-      {open && <div className="space-y-3">{children}</div>}
+
+      {/* Active project note history */}
+      {activeProj && (
+        <div>
+          <label className="ops-label">Project Notes — {activeProj.name}</label>
+          <NoteHistory
+            notes={activeProj.notes || []}
+            onAdd={(text) => addNote(activeProj.id, text)}
+            accentColor={card.accentColor}
+          />
+        </div>
+      )}
     </div>
   )
 }
 
-function ObjectivesPanel() {
-  const { state, update, addXp, ts } = useStore()
-  const [newObj, setNewObj] = useState('')
-  const objectives = state.objectives || []
+// ─── Inline field editor ──────────────────────────────────────────────────────
 
-  const add = () => {
-    if (!newObj.trim()) return
-    update(s => {
-      s.objectives = [...(s.objectives || []), {
-        id: crypto.randomUUID(), text: newObj.trim(), done: false, at: ts()
-      }]
-    })
-    setNewObj('')
-  }
-
-  const toggle = (id) => {
-    const obj = objectives.find(o => o.id === id)
-    update(s => {
-      s.objectives = s.objectives.map(o => o.id === id ? { ...o, done: !o.done, doneAt: !o.done ? ts() : null } : o)
-    })
-    if (!obj?.done) addXp(25, `Objective complete: ${obj?.text}`)
-  }
-
-  const remove = (id) => update(s => { s.objectives = s.objectives.filter(o => o.id !== id) })
+function InlineField({ label, value, onSave, type = 'text', min, max }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const save = () => { onSave(draft); setEditing(false) }
+  const cancel = () => { setDraft(value); setEditing(false) }
 
   return (
-    <div className="ops-card-glow">
-      <div className="section-title">
-        <Target className="w-3.5 h-3.5 text-ops-green" />
-        Active Objectives
-        <span className="ml-auto text-[10px] text-gray-600">{objectives.filter(o => !o.done).length} active</span>
-      </div>
+    <div>
+      <label className="ops-label">{label}</label>
+      {editing ? (
+        <div className="flex gap-1">
+          <input
+            type={type} min={min} max={max}
+            className="ops-input flex-1 text-sm"
+            value={draft}
+            onChange={e => setDraft(type === 'number' ? Number(e.target.value) : e.target.value)}
+            autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+          />
+          <button onClick={save} className="ops-btn-primary"><Check className="w-3 h-3" /></button>
+          <button onClick={cancel} className="ops-btn-ghost"><X className="w-3 h-3" /></button>
+        </div>
+      ) : (
+        <div
+          className="flex items-center gap-2 group cursor-pointer"
+          onClick={() => { setDraft(value); setEditing(true) }}
+        >
+          <span className="text-sm text-gray-200">{String(value) || <span className="text-gray-600 italic">—</span>}</span>
+          <Edit3 className="w-3 h-3 text-gray-700 group-hover:text-ops-green transition-colors" />
+        </div>
+      )}
+    </div>
+  )
+}
 
-      <div className="flex gap-2 mb-3">
-        <input
-          className="ops-input text-sm flex-1"
-          placeholder="Add objective…"
-          value={newObj}
-          onChange={e => setNewObj(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && add()}
-        />
-        <button onClick={add} className="ops-btn-primary flex-shrink-0"><Plus className="w-3.5 h-3.5" /></button>
-      </div>
+// ─── Add New Card Modal ───────────────────────────────────────────────────────
 
-      <div className="space-y-1.5 max-h-56 overflow-y-auto">
-        {objectives.length === 0 && (
-          <p className="text-xs text-gray-600 text-center py-4">No objectives set — add them above.</p>
-        )}
-        {objectives.filter(o => !o.done).map(obj => (
-          <div key={obj.id} className="flex items-start gap-2 p-2 rounded bg-bunker-800 hover:bg-bunker-700 group">
-            <button
-              onClick={() => toggle(obj.id)}
-              className="w-4 h-4 rounded border border-bunker-600 hover:border-ops-green flex-shrink-0 mt-0.5 transition-colors"
-            />
-            <span className="text-sm text-gray-200 flex-1">{obj.text}</span>
-            <span className="text-[9px] text-gray-600 flex-shrink-0">{format(new Date(obj.at), 'MM/dd HH:mm')}</span>
-            <button onClick={() => remove(obj.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-              <Trash2 className="w-3 h-3 text-gray-600 hover:text-ops-red" />
-            </button>
-          </div>
-        ))}
-        {objectives.filter(o => o.done).length > 0 && (
-          <div className="pt-2">
-            <div className="text-[9px] text-gray-600 uppercase tracking-wider mb-1">Completed</div>
-            {objectives.filter(o => o.done).map(obj => (
-              <div key={obj.id} className="flex items-center gap-2 p-2 rounded opacity-40 group">
-                <Check className="w-3 h-3 text-ops-green flex-shrink-0" />
-                <span className="text-xs text-gray-400 flex-1 line-through">{obj.text}</span>
-                <button onClick={() => remove(obj.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Trash2 className="w-3 h-3 text-gray-600 hover:text-ops-red" />
+const ICON_OPTS = ['Network','BookOpen','Shield','Gamepad2','Brain','Briefcase','Code','Database','Globe','Server','Zap','Target','Star','Cpu']
+const COLOR_OPTS = ['green','blue','purple','amber','cyan','lime','red']
+
+function AddCardModal({ onSave, onClose }) {
+  const [title, setTitle]   = useState('')
+  const [icon, setIcon]     = useState('Star')
+  const [color, setColor]   = useState('green')
+  const [status, setStatus] = useState('Active')
+
+  const submit = () => {
+    if (!title.trim()) return
+    onSave({ title: title.trim(), icon, accentColor: color, status, hasProjects: false })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-bunker-900 border border-bunker-600 rounded-lg w-full max-w-md p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-100">New SITREP Card</h3>
+          <button onClick={onClose}><X className="w-4 h-4 text-gray-500 hover:text-gray-200" /></button>
+        </div>
+
+        <div>
+          <label className="ops-label">Title</label>
+          <input className="ops-input" placeholder="e.g. Arista Study, Side Project…" value={title} onChange={e => setTitle(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && submit()} />
+        </div>
+
+        <div>
+          <label className="ops-label">Status</label>
+          <select className="ops-input" value={status} onChange={e => setStatus(e.target.value)}>
+            {STATUS_OPTS.map(s => <option key={s} className="bg-bunker-800">{s}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="ops-label">Icon</label>
+          <div className="flex flex-wrap gap-2">
+            {ICON_OPTS.map(name => {
+              const I = ICON_MAP[name]
+              return (
+                <button
+                  key={name}
+                  onClick={() => setIcon(name)}
+                  className={`p-2 rounded border transition-all ${icon === name ? 'border-ops-green bg-ops-green/10 text-ops-green' : 'border-bunker-600 text-gray-500 hover:border-gray-500'}`}
+                  title={name}
+                >
+                  <I className="w-4 h-4" />
                 </button>
-              </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="ops-label">Color</label>
+          <div className="flex gap-2 flex-wrap">
+            {COLOR_OPTS.map(c => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`w-7 h-7 rounded-full border-2 transition-all ${ACCENT_COLORS[c]?.dot || 'bg-gray-500'} ${color === c ? 'border-white scale-110' : 'border-transparent'}`}
+                title={c}
+              />
             ))}
           </div>
-        )}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="ops-btn-ghost flex-1">Cancel</button>
+          <button onClick={submit} className="ops-btn-primary flex-1">Create Card</button>
+        </div>
       </div>
     </div>
   )
 }
+
+// ─── Individual SITREP Card ───────────────────────────────────────────────────
+
+function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
+  const [tab, setTab] = useState('notes') // 'notes' | 'objectives'
+  const [collapsed, setCollapsed] = useState(card.collapsed || false)
+  const c = ACCENT_COLORS[card.accentColor] || ACCENT_COLORS.green
+  const Icon = ICON_MAP[card.icon] || Star
+
+  const set = (fields) => onUpdate({ ...card, ...fields })
+
+  const addNote = (text) => {
+    set({ notes: [{ id: crypto.randomUUID(), text, at: ts() }, ...(card.notes || [])] })
+    addXp(5, `Note on ${card.title}`)
+  }
+
+  const addObjective = (text, critical) => {
+    set({ objectives: [...(card.objectives || []), { id: crypto.randomUUID(), text, critical: !!critical, done: false, doneAt: null, at: ts() }] })
+    addXp(5, `Objective on ${card.title}`)
+  }
+
+  const toggleObjective = (id) => {
+    const obj = (card.objectives || []).find(o => o.id === id)
+    set({ objectives: (card.objectives || []).map(o => o.id === id ? { ...o, done: !o.done, doneAt: !o.done ? ts() : null } : o) })
+    if (!obj?.done) addXp(obj?.critical ? 50 : 25, `Objective done: ${obj?.text?.slice(0, 30)}`)
+  }
+
+  const deleteObjective = (id) => set({ objectives: (card.objectives || []).filter(o => o.id !== id) })
+  const toggleCritical  = (id) => set({ objectives: (card.objectives || []).map(o => o.id === id ? { ...o, critical: !o.critical } : o) })
+
+  const activeCount = (card.objectives || []).filter(o => !o.done).length
+
+  return (
+    <div className={`bg-bunker-900 border border-bunker-700 border-l-4 ${c.border} rounded-lg overflow-hidden`}>
+      {/* Card header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-bunker-800">
+        <Icon className={`w-4 h-4 flex-shrink-0 ${c.text}`} />
+        <span className="text-sm font-bold text-gray-100 flex-1 truncate">{card.title}</span>
+
+        {/* Status badge — clickable to cycle */}
+        <div className="relative group">
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border cursor-pointer select-none ${STATUS_COLORS[card.status] || STATUS_COLORS['Active']}`}>
+            {card.status}
+          </span>
+          <div className="absolute right-0 top-6 z-10 hidden group-hover:block bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[120px] shadow-xl">
+            {STATUS_OPTS.map(s => (
+              <button
+                key={s}
+                onClick={() => set({ status: s })}
+                className="block w-full text-left px-3 py-1 text-xs text-gray-300 hover:bg-bunker-700 transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeCount > 0 && (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.pill} border ml-1`}>{activeCount} obj</span>
+        )}
+
+        <button onClick={() => { setCollapsed(col => !col); set({ collapsed: !collapsed }) }} className="text-gray-600 hover:text-gray-300 transition-colors ml-1">
+          {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+        </button>
+
+        <button onClick={() => onDelete(card.id)} className="text-gray-700 hover:text-ops-red transition-colors" title="Remove card">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="p-4 space-y-4">
+          {/* Boeing-specific fields */}
+          {card.id === 'boeing' && (
+            <div className="grid grid-cols-2 gap-3 pb-2 border-b border-bunker-800">
+              <div><label className="ops-label">Role</label><p className="text-sm text-gray-200">{card.role}</p></div>
+              <div><label className="ops-label">L3 Advocate</label><p className={`text-sm font-semibold ${c.text}`}>{card.l3}</p></div>
+            </div>
+          )}
+
+          {/* WGU-specific fields */}
+          {card.id === 'wgu' && (
+            <div className="space-y-3 pb-2 border-b border-bunker-800">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="ops-label">Program</label><p className="text-sm text-gray-300">{card.program}</p></div>
+                <div>
+                  <label className="ops-label">Days Left in Term</label>
+                  <InlineField label="" value={card.daysLeftInTerm} type="number" min={0} max={365}
+                    onSave={v => { set({ daysLeftInTerm: Number(v) }); addXp(3, 'Updated WGU term days') }} />
+                </div>
+              </div>
+              <InlineField label="Current Course" value={card.currentCourse}
+                onSave={v => { set({ currentCourse: v }); addXp(3, 'Updated WGU course') }} />
+              <div>
+                <label className="ops-label">Credit Units — {card.completedCUs} / {card.totalCUs}</label>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="flex-1 h-2.5 bg-bunker-700 rounded-full overflow-hidden">
+                    <div className={`h-full ${c.dot} rounded-full xp-bar-fill`} style={{ width: `${Math.min((card.completedCUs/card.totalCUs)*100, 100)}%` }} />
+                  </div>
+                  <div className="flex gap-2">
+                    <InlineField label="" value={card.completedCUs} type="number" min={0} max={card.totalCUs}
+                      onSave={v => { set({ completedCUs: Number(v) }); addXp(10, 'Updated WGU CUs completed') }} />
+                    <span className="text-gray-600 text-sm">/</span>
+                    <InlineField label="" value={card.totalCUs} type="number" min={1}
+                      onSave={v => set({ totalCUs: Number(v) })} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* GDQuest-specific */}
+          {card.id === 'gdquest' && (
+            <div className="space-y-2 pb-2 border-b border-bunker-800">
+              <InlineField label="Current Lesson" value={card.currentLesson || ''}
+                onSave={v => { set({ currentLesson: v }); addXp(3, 'Updated GDQuest lesson') }} />
+              <div>
+                <label className="ops-label">Progress — {card.progressPercent || 0}%</label>
+                <div className="h-2.5 bg-bunker-700 rounded-full overflow-hidden mb-1">
+                  <div className={`h-full ${c.dot} rounded-full xp-bar-fill`} style={{ width: `${card.progressPercent || 0}%` }} />
+                </div>
+                <input type="range" min="0" max="100"
+                  value={card.progressPercent || 0}
+                  onChange={e => set({ progressPercent: Number(e.target.value) })}
+                  className="w-full accent-ops-lime" />
+              </div>
+            </div>
+          )}
+
+          {/* Safe Days-specific */}
+          {card.id === 'safedays' && (
+            <div className="pb-2 border-b border-bunker-800">
+              <label className="ops-label">Tagline</label>
+              <p className="text-xs text-gray-400">{card.tagline}</p>
+            </div>
+          )}
+
+          {/* GameDev-specific */}
+          {card.id === 'gamedev' && (
+            <div className="pb-2 border-b border-bunker-800">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="ops-label">Engine</label><p className="text-sm text-gray-200">{card.engine}</p></div>
+                <InlineField label="Current Milestone" value={card.currentMilestone || ''}
+                  onSave={v => { set({ currentMilestone: v }); addXp(5, 'GameDev milestone updated') }} />
+              </div>
+            </div>
+          )}
+
+          {/* Custom card editable title */}
+          {!['boeing','wgu','gdquest','safedays','gamedev'].includes(card.id) && (
+            <InlineField label="Status Detail" value={card.subtitle || ''}
+              onSave={v => set({ subtitle: v })} />
+          )}
+
+          {/* Project panel (Boeing, GameDev, or any hasProjects card) */}
+          {card.hasProjects && (
+            <div className="pb-2 border-b border-bunker-800">
+              <ProjectPanel card={card} onUpdateCard={(fields) => set(fields)} addXp={addXp} ts={ts} />
+            </div>
+          )}
+
+          {/* Tab bar: Notes | Objectives */}
+          <div className="flex border border-bunker-700 rounded overflow-hidden">
+            <button
+              onClick={() => setTab('notes')}
+              className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'notes' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
+            >
+              <Clock className="w-3 h-3 inline mr-1" />
+              Notes ({(card.notes || []).length})
+            </button>
+            <button
+              onClick={() => setTab('objectives')}
+              className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${tab === 'objectives' ? `${c.pill} border-0` : 'text-gray-600 hover:text-gray-400'}`}
+            >
+              <Target className="w-3 h-3 inline mr-1" />
+              Objectives ({activeCount})
+            </button>
+          </div>
+
+          {tab === 'notes' && (
+            <NoteHistory notes={card.notes || []} onAdd={addNote} accentColor={card.accentColor} />
+          )}
+          {tab === 'objectives' && (
+            <CardObjectives
+              objectives={card.objectives || []}
+              onAdd={addObjective}
+              onToggle={toggleObjective}
+              onDelete={deleteObjective}
+              onToggleCritical={toggleCritical}
+              accentColor={card.accentColor}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main SITREP page ─────────────────────────────────────────────────────────
 
 export default function Sitrep() {
   const { state, update, addXp, ts } = useStore()
-  const s = state.sitrep
+  const cards = state.sitrep?.cards || []
+  const [showAddModal, setShowAddModal] = useState(false)
   const now = new Date()
 
-  const saveBoeing = (key, val) => {
-    update(d => { d.sitrep.boeing[key] = val; d.sitrep.boeing.lastUpdated = ts() })
-    addXp(5, `Updated Boeing SITREP: ${key}`)
+  const updateCard = (updatedCard) => {
+    update(s => {
+      s.sitrep.cards = s.sitrep.cards.map(c => c.id === updatedCard.id ? updatedCard : c)
+    })
   }
-  const saveWgu = (key, val) => {
-    update(d => { d.sitrep.wgu[key] = val; d.sitrep.wgu.lastUpdated = ts() })
-    addXp(5, `Updated WGU SITREP: ${key}`)
+
+  const deleteCard = (id) => {
+    if (!confirm('Remove this card from SITREP?')) return
+    update(s => { s.sitrep.cards = s.sitrep.cards.filter(c => c.id !== id) })
   }
-  const saveSafeDays = (key, val) => {
-    update(d => { d.sitrep.safeDays[key] = val; d.sitrep.safeDays.lastUpdated = ts() })
-    addXp(5, `Updated Safe Days SITREP: ${key}`)
+
+  const addCard = (fields) => {
+    const newCard = {
+      id: crypto.randomUUID(),
+      order: cards.length,
+      collapsed: false,
+      notes: [],
+      objectives: [],
+      projects: fields.hasProjects ? [] : undefined,
+      activeProjectId: null,
+      ...fields,
+    }
+    update(s => { s.sitrep.cards = [...s.sitrep.cards, newCard] })
+    addXp(15, `New SITREP card: ${fields.title}`)
   }
-  const saveGameDev = (key, val) => {
-    update(d => { d.sitrep.gameDev[key] = val; d.sitrep.gameDev.lastUpdated = ts() })
-    addXp(5, `Updated GameDev SITREP: ${key}`)
-  }
-  const saveGdquest = (key, val) => {
-    update(d => { d.sitrep.gdquest[key] = val; d.sitrep.gdquest.lastUpdated = ts() })
-    addXp(5, `Updated GDQuest SITREP: ${key}`)
-  }
+
+  // All active objectives across all cards for the summary strip
+  const allActiveObj = cards.flatMap(c =>
+    (c.objectives || []).filter(o => !o.done).map(o => ({ ...o, cardTitle: c.title, cardColor: c.accentColor }))
+  )
+  const criticalObj = allActiveObj.filter(o => o.critical)
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
+      {showAddModal && <AddCardModal onSave={addCard} onClose={() => setShowAddModal(false)} />}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-ops-green tracking-widest">// SITREP</h1>
-          <p className="text-xs text-gray-600 mt-0.5">
-            {format(now, 'EEEE, MMMM d yyyy')} · {format(now, 'HH:mm')}
-          </p>
+          <p className="text-xs text-gray-600 mt-0.5">{format(now, 'EEEE, MMMM d yyyy')} · {format(now, 'HH:mm')}</p>
         </div>
-        <div className="text-right">
-          <div className="text-[10px] text-gray-600">OPERATOR</div>
-          <div className="text-sm font-bold text-gray-200">{state.profile.name}</div>
-        </div>
+        <button onClick={() => setShowAddModal(true)} className="ops-btn-primary flex items-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Add Card
+        </button>
       </div>
 
-      {/* Two-column grid */}
+      {/* Critical objectives strip */}
+      {criticalObj.length > 0 && (
+        <div className="flex flex-wrap gap-2 p-3 bg-ops-red/5 border border-ops-red/30 rounded-lg">
+          <div className="flex items-center gap-1.5 w-full mb-1">
+            <AlertTriangle className="w-3.5 h-3.5 text-ops-red" />
+            <span className="text-[10px] text-ops-red uppercase tracking-wider font-semibold">Critical Objectives</span>
+          </div>
+          {criticalObj.map(o => (
+            <div key={o.id} className="text-[11px] px-2 py-0.5 rounded border border-ops-red/40 bg-ops-red/10 text-ops-red">
+              <span className="text-gray-500">[{o.cardTitle}]</span> {o.text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Cards grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Boeing */}
-        <SitrepCard icon={Network} color="border-ops-blue" title="Boeing — Dell Contract" status={s.boeing.status}>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="ops-label">Role</span>
-              <div className="text-sm text-gray-200">{s.boeing.role}</div>
-            </div>
-            <div>
-              <span className="ops-label">L3 Advocate</span>
-              <div className="text-sm text-ops-green">{s.boeing.l3}</div>
-            </div>
-          </div>
-          <EditableBlock label="Active Project" value={s.boeing.activeProject} onSave={v => saveBoeing('activeProject', v)} />
-          <EditableBlock label="Notes / Latest Update" value={s.boeing.notes} onSave={v => saveBoeing('notes', v)} multiline />
-          {s.boeing.lastUpdated && (
-            <div className="text-[9px] text-gray-600">Updated {format(new Date(s.boeing.lastUpdated), 'MM/dd/yy HH:mm')}</div>
-          )}
-        </SitrepCard>
-
-        {/* WGU */}
-        <SitrepCard icon={BookOpen} color="border-ops-purple" title="WGU — Cloud & Network BS" status="In Progress">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="ops-label">Program</span>
-              <div className="text-sm text-gray-200">{s.wgu.program}</div>
-            </div>
-            <div>
-              <span className="ops-label">Days Left in Term</span>
-              <div className={`text-sm font-bold ${s.wgu.daysLeftInTerm <= 7 ? 'text-ops-red' : s.wgu.daysLeftInTerm <= 14 ? 'text-ops-amber' : 'text-ops-green'}`}>
-                {s.wgu.daysLeftInTerm}d
-              </div>
-            </div>
-          </div>
-          <EditableBlock label="Current Course" value={s.wgu.currentCourse} onSave={v => saveWgu('currentCourse', v)} />
-          <div>
-            <span className="ops-label">Progress</span>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-bunker-700 rounded-full overflow-hidden">
-                <div className="h-full bg-ops-purple rounded-full xp-bar-fill" style={{ width: `${(s.wgu.completedCUs / s.wgu.totalCUs) * 100}%` }} />
-              </div>
-              <span className="text-xs text-gray-400">{s.wgu.completedCUs}/{s.wgu.totalCUs} CUs</span>
-            </div>
-          </div>
-          <EditableBlock label="Notes" value={s.wgu.notes} onSave={v => saveWgu('notes', v)} multiline />
-          {s.wgu.lastUpdated && (
-            <div className="text-[9px] text-gray-600">Updated {format(new Date(s.wgu.lastUpdated), 'MM/dd/yy HH:mm')}</div>
-          )}
-        </SitrepCard>
-
-        {/* Safe Days */}
-        <SitrepCard icon={Shield} color="border-ops-green" title="Safe Days Security" status={s.safeDays.status}>
-          <div>
-            <span className="ops-label">Business</span>
-            <div className="text-sm text-ops-green font-semibold">{s.safeDays.businessName}</div>
-            <div className="text-xs text-gray-500">{s.safeDays.tagline}</div>
-          </div>
-          <EditableBlock label="Latest Update" value={s.safeDays.latestUpdate} onSave={v => saveSafeDays('latestUpdate', v)} multiline />
-          {s.safeDays.lastUpdated && (
-            <div className="text-[9px] text-gray-600">Updated {format(new Date(s.safeDays.lastUpdated), 'MM/dd/yy HH:mm')}</div>
-          )}
-        </SitrepCard>
-
-        {/* Game Dev */}
-        <SitrepCard icon={Gamepad2} color="border-ops-amber" title="Game Dev" status="In Dev">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="ops-label">Engine</span>
-              <div className="text-sm text-gray-200">{s.gameDev.engine}</div>
-            </div>
-            <div>
-              <span className="ops-label">Project</span>
-              <div className="text-sm text-gray-200">{s.gameDev.projectName}</div>
-            </div>
-          </div>
-          <EditableBlock label="Current Milestone" value={s.gameDev.currentMilestone} onSave={v => saveGameDev('currentMilestone', v)} />
-          <EditableBlock label="Notes" value={s.gameDev.notes} onSave={v => saveGameDev('notes', v)} multiline />
-          {s.gameDev.lastUpdated && (
-            <div className="text-[9px] text-gray-600">Updated {format(new Date(s.gameDev.lastUpdated), 'MM/dd/yy HH:mm')}</div>
-          )}
-        </SitrepCard>
-
-        {/* GDQuest */}
-        <SitrepCard icon={Brain} color="border-ops-lime" title="GDQuest Course" status="Active">
-          <EditableBlock label="Current Lesson" value={s.gdquest.currentLesson} onSave={v => saveGdquest('currentLesson', v)} />
-          <div>
-            <span className="ops-label">Course Progress</span>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-bunker-700 rounded-full overflow-hidden">
-                <div className="h-full bg-ops-lime rounded-full xp-bar-fill" style={{ width: `${s.gdquest.progressPercent}%` }} />
-              </div>
-              <span className="text-xs text-gray-400">{s.gdquest.progressPercent}%</span>
-            </div>
-            <input
-              type="range" min="0" max="100"
-              value={s.gdquest.progressPercent}
-              onChange={e => saveGdquest('progressPercent', Number(e.target.value))}
-              className="w-full mt-1 accent-ops-lime"
-            />
-          </div>
-          <EditableBlock label="Notes" value={s.gdquest.notes} onSave={v => saveGdquest('notes', v)} multiline />
-          {s.gdquest.lastUpdated && (
-            <div className="text-[9px] text-gray-600">Updated {format(new Date(s.gdquest.lastUpdated), 'MM/dd/yy HH:mm')}</div>
-          )}
-        </SitrepCard>
+        {cards.map(card => (
+          <SitrepCard
+            key={card.id}
+            card={card}
+            onUpdate={updateCard}
+            onDelete={deleteCard}
+            addXp={addXp}
+            ts={ts}
+          />
+        ))}
       </div>
 
-      {/* Objectives */}
-      <ObjectivesPanel />
+      {cards.length === 0 && (
+        <div className="text-center py-16 ops-card">
+          <Target className="w-10 h-10 text-gray-700 mx-auto mb-3" />
+          <p className="text-gray-600 text-sm">No cards yet. Click <strong className="text-ops-green">Add Card</strong> to build your SITREP.</p>
+        </div>
+      )}
+
+      {/* Active objectives summary */}
+      {allActiveObj.length > 0 && (
+        <div className="ops-card">
+          <div className="section-title mb-3">
+            <Target className="w-3.5 h-3.5 text-ops-green" />
+            All Active Objectives
+            <span className="ml-auto text-[10px] text-gray-600">{allActiveObj.length} across {cards.filter(c => (c.objectives||[]).some(o=>!o.done)).length} cards</span>
+          </div>
+          <div className="space-y-1">
+            {allActiveObj.map(o => {
+              const c = ACCENT_COLORS[o.cardColor] || ACCENT_COLORS.green
+              return (
+                <div key={o.id} className={`flex items-center gap-2 text-xs p-1.5 rounded ${o.critical ? 'bg-ops-red/5' : ''}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
+                  <span className="text-gray-500 flex-shrink-0">[{o.cardTitle}]</span>
+                  <span className="text-gray-200 flex-1">{o.text}</span>
+                  {o.critical && <AlertTriangle className="w-3 h-3 text-ops-red flex-shrink-0" />}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
