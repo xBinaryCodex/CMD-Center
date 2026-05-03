@@ -4,42 +4,74 @@ import { initSession, clearSession } from '../store/useStore'
 
 const AuthContext = createContext(null)
 
+// Never block the UI for more than this long waiting on Supabase
+const INIT_TIMEOUT_MS = 5000
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ])
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let done = false
+
+    const finish = () => {
+      if (!done) { done = true; setLoading(false) }
+    }
+
+    // Hard safety net — never stay on spinner longer than INIT_TIMEOUT_MS
+    const safetyTimer = setTimeout(finish, INIT_TIMEOUT_MS)
+
     // Check existing session on mount
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         if (session?.user) {
-          await initSession(session.user.id)
+          // Set the user immediately so the app is unblocked, sync in background
           setUser(session.user)
+          finish()
+          // Background sync — won't block loading
+          initSession(session.user.id).catch(err =>
+            console.warn('[Auth] Background sync failed, using local data:', err.message)
+          )
+        } else {
+          finish()
         }
       })
-      .catch(err => console.warn('[Auth] getSession failed (check env vars):', err.message))
-      .finally(() => setLoading(false))
+      .catch(err => {
+        console.warn('[Auth] getSession failed:', err.message)
+        finish()
+      })
 
-    // Listen for auth state changes (login, logout, token refresh)
+    // Auth state changes (sign in / sign out events)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        await initSession(session.user.id)
         setUser(session.user)
+        finish()
+        // Sync in background — don't block the UI
+        initSession(session.user.id).catch(err =>
+          console.warn('[Auth] Sync after sign-in failed:', err.message)
+        )
       } else if (event === 'SIGNED_OUT') {
         clearSession()
         setUser(null)
+        done = false // allow loading to reset if they sign in again
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(safetyTimer)
+      subscription.unsubscribe()
+    }
   }, [])
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password })
-
-  const signUp = (email, password) =>
-    supabase.auth.signUp({ email, password })
-
+  const signIn  = (email, password) => supabase.auth.signInWithPassword({ email, password })
+  const signUp  = (email, password) => supabase.auth.signUp({ email, password })
   const signOut = () => supabase.auth.signOut()
 
   return (
