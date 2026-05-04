@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useStore, buildDefaultCards } from '../store/useStore'
 import {
   Network, BookOpen, Shield, Gamepad2, Brain, Briefcase, Code,
   Database, Globe, Server, Zap, Target, Star, Cpu, Plus,
   ChevronDown, ChevronUp, Check, X, Edit3, Trash2,
-  Clock, AlertTriangle,
+  Clock, AlertTriangle, CalendarDays,
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, isAfter, startOfDay } from 'date-fns'
 
 // ─── Dynamic hex color helpers ────────────────────────────────────────────────
 
@@ -190,17 +190,91 @@ function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCr
   )
 }
 
+// ─── Events tab content ───────────────────────────────────────────────────────
+
+function normalizeEvent(ev) {
+  return {
+    ...ev,
+    startDate: ev.startDate || ev.date || '',
+    startTime: ev.startTime || ev.time || '',
+  }
+}
+
+function CardEvents({ cardId, hex }) {
+  const { state } = useStore()
+  const a = ac(hex)
+  const today = startOfDay(new Date())
+
+  const events = useMemo(() => {
+    const raw = (state.calendarEvents || []).map(normalizeEvent)
+    return raw
+      .filter(ev => ev.subject === cardId && ev.startDate)
+      .filter(ev => {
+        try { return !isAfter(today, startOfDay(parseISO(ev.startDate))) || ev.startDate >= format(today, 'yyyy-MM-dd') }
+        catch { return true }
+      })
+      .sort((a, b) => {
+        const da = a.startDate + (a.startTime || '')
+        const db = b.startDate + (b.startTime || '')
+        return da < db ? -1 : da > db ? 1 : 0
+      })
+      .slice(0, 20)
+  }, [state.calendarEvents, cardId])
+
+  if (events.length === 0) {
+    return <p className="text-[11px] text-gray-700 italic">No upcoming events for this domain.</p>
+  }
+
+  const PRIORITY_COLORS = { critical: '#ef4444', high: '#f59e0b', normal: '#6b7280', low: '#374151' }
+
+  return (
+    <div className="space-y-1.5">
+      {events.map(ev => {
+        const pColor = PRIORITY_COLORS[ev.priority] || PRIORITY_COLORS.normal
+        return (
+          <div key={ev.id} className="rounded p-2 bg-bunker-800 border-l-2 flex items-start gap-2" style={a.leftBorder}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: pColor }} />
+                <p className="text-xs text-gray-200 font-medium truncate">{ev.title || 'Untitled Event'}</p>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {ev.startDate}
+                {ev.endDate && ev.endDate !== ev.startDate ? ` → ${ev.endDate}` : ''}
+                {!ev.allDay && ev.startTime ? ` · ${ev.startTime}${ev.endTime ? `–${ev.endTime}` : ''}` : ev.allDay ? ' · All day' : ''}
+              </p>
+              {ev.description && (
+                <p className="text-[10px] text-gray-600 mt-0.5 truncate">{ev.description}</p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Project / Client / Course / Module Panel ─────────────────────────────────
 
 function ProjectPanel({ card, onUpdateCard, addXp, ts }) {
   const [tab, setTab]       = useState('notes')
   const [newName, setNewName] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const { state } = useStore()
   const a = ac(card.accentColor)
   const label    = card.projectLabel || 'Project'
   const projects = card.projects || []
   const activeProj = projects.find(p => p.id === card.activeProjectId) || projects[0]
   const activeCount = (activeProj?.objectives || []).filter(o => !o.done).length
+
+  // Count upcoming events for this card
+  const eventCount = useMemo(() => {
+    const today = format(startOfDay(new Date()), 'yyyy-MM-dd')
+    return (state.calendarEvents || [])
+      .map(normalizeEvent)
+      .filter(ev => ev.subject === card.id && ev.startDate >= today)
+      .length
+  }, [state.calendarEvents, card.id])
 
   const updateActiveProj = (fields) =>
     onUpdateCard({ projects: projects.map(p => p.id === activeProj?.id ? { ...p, ...fields } : p) })
@@ -285,8 +359,9 @@ function ProjectPanel({ card, onUpdateCard, addXp, ts }) {
         <>
           <div className="flex border border-bunker-700 rounded overflow-hidden">
             {[
-              { id: 'notes', icon: Clock, label: `Notes (${(activeProj.notes || []).length})` },
-              { id: 'objectives', icon: Target, label: `Objectives (${activeCount})` },
+              { id: 'notes',      icon: Clock,        label: `Notes (${(activeProj.notes || []).length})` },
+              { id: 'objectives', icon: Target,        label: `Objectives (${activeCount})` },
+              { id: 'events',     icon: CalendarDays,  label: `Events (${eventCount})` },
             ].map(t => {
               const TIcon = t.icon
               const isActive = tab === t.id
@@ -309,6 +384,9 @@ function ProjectPanel({ card, onUpdateCard, addXp, ts }) {
               onAdd={addObjective} onToggle={toggleObj} onDelete={deleteObj}
               onToggleCritical={toggleCritical} hex={card.accentColor}
             />
+          )}
+          {tab === 'events' && (
+            <CardEvents cardId={card.id} hex={card.accentColor} />
           )}
         </>
       )}
@@ -366,7 +444,7 @@ function AddCardModal({ onSave, onClose }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-bunker-900 border border-bunker-600 rounded-lg w-full max-w-md p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-100">New SITREP Card</h3>
+          <h3 className="text-sm font-bold text-gray-100">New Domain</h3>
           <button onClick={onClose}><X className="w-4 h-4 text-gray-500 hover:text-gray-200" /></button>
         </div>
 
@@ -441,7 +519,7 @@ function AddCardModal({ onSave, onClose }) {
           <button onClick={onClose} className="ops-btn-ghost flex-1">Cancel</button>
           <button onClick={submit} className="ops-btn flex-1 border rounded transition-all py-2 font-semibold text-xs"
             style={{ backgroundColor: a.bg12, color: a.color, borderColor: a.bd30 }}>
-            Create Card
+            Create Domain
           </button>
         </div>
       </div>
@@ -664,7 +742,7 @@ export default function Sitrep() {
           <p className="text-xs text-gray-600 mt-0.5">{format(now, 'EEEE, MMMM d yyyy')} · {format(now, 'HH:mm')}</p>
         </div>
         <button onClick={() => setShowAddModal(true)} className="ops-btn-primary flex items-center gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Add Card
+          <Plus className="w-3.5 h-3.5" /> Add Domain
         </button>
       </div>
 
@@ -695,7 +773,7 @@ export default function Sitrep() {
       {cards.length === 0 && (
         <div className="text-center py-16 ops-card">
           <Target className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-600 text-sm">No cards yet. Click <strong className="text-ops-green">Add Card</strong> to build your SITREP.</p>
+          <p className="text-gray-600 text-sm">No domains yet. Click <strong className="text-ops-green">Add Domain</strong> to build your SITREP.</p>
         </div>
       )}
 

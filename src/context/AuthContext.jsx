@@ -36,7 +36,8 @@ export function AuthProvider({ children }) {
           setUser(session.user)
           finish()
           // Background sync — won't block loading
-          initSession(session.user.id).catch(err =>
+          const firstName = session.user.user_metadata?.first_name || null
+          initSession(session.user.id, firstName).catch(err =>
             console.warn('[Auth] Background sync failed, using local data:', err.message)
           )
         } else {
@@ -54,7 +55,8 @@ export function AuthProvider({ children }) {
         setUser(session.user)
         finish()
         // Sync in background — don't block the UI
-        initSession(session.user.id).catch(err =>
+        const firstName = session.user.user_metadata?.first_name || null
+        initSession(session.user.id, firstName).catch(err =>
           console.warn('[Auth] Sync after sign-in failed:', err.message)
         )
       } else if (event === 'SIGNED_OUT') {
@@ -71,7 +73,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signIn  = (email, password) => supabase.auth.signInWithPassword({ email, password })
-  const signUp  = (email, password) => supabase.auth.signUp({ email, password })
+  const signUp  = (email, password, extraOpts) => supabase.auth.signUp({ email, password, ...extraOpts })
   const signOut = () => supabase.auth.signOut()
 
   return (

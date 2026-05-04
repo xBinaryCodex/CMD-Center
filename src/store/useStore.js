@@ -315,7 +315,7 @@ function scheduleRemoteSync() {
   }, SYNC_DEBOUNCE_MS)
 }
 
-async function syncFromRemote(userId) {
+async function syncFromRemote(userId, displayName) {
   try {
     const remote = await getRemoteData(userId)
     if (!remote) { await upsertRemoteData(userId, globalState); return }
@@ -325,6 +325,10 @@ async function syncFromRemote(userId) {
       merged.profile.xp = globalState.profile.xp
       merged.profile.totalXpEarned = globalState.profile.totalXpEarned
       merged.xpLog = [...(globalState.xpLog || []), ...(merged.xpLog || [])].slice(0, 200)
+    }
+    // Use auth metadata name if provided (overrides hardcoded default)
+    if (displayName) {
+      merged.profile.name = displayName
     }
     globalState = merged
     saveLocal(merged)
@@ -369,9 +373,9 @@ export function useStore() {
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────
 
-export async function initSession(userId) {
+export async function initSession(userId, displayName) {
   currentUserId = userId
-  await syncFromRemote(userId)
+  await syncFromRemote(userId, displayName)
 }
 
 export function clearSession() {

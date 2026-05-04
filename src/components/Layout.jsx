@@ -3,29 +3,34 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../context/AuthContext'
 import {
-  LayoutDashboard, CalendarDays, ListChecks, BookOpen,
-  Network, Gamepad2, Briefcase, FlaskConical, Timer,
+  LayoutDashboard, CalendarDays, ListChecks,
+  BookOpen, Network, Gamepad2, Briefcase, FlaskConical, Timer,
   ChevronRight, ChevronLeft, Shield, Zap, Trophy,
-  Brain, Map, Cloud, CloudOff, LogOut
+  Brain, Map, Cloud, CloudOff, LogOut,
+  Code, Database, Globe, Server, Star, Cpu, Target,
 } from 'lucide-react'
 
-const NAV = [
-  { to: '/',         label: 'SITREP',       icon: LayoutDashboard, color: 'text-ops-green' },
-  { to: '/calendar', label: 'Calendar',     icon: CalendarDays,    color: 'text-ops-blue' },
-  { to: '/battleplan',label: 'Battle Plan', icon: Map,             color: 'text-ops-amber' },
-  { to: '/tasks',    label: 'Tasks',        icon: ListChecks,      color: 'text-ops-cyan' },
-  { divider: true, label: 'DOMAINS' },
-  { to: '/wgu',      label: 'WGU / Cloud',  icon: BookOpen,        color: 'text-ops-purple' },
-  { to: '/boeing',   label: 'Boeing',       icon: Network,         color: 'text-ops-blue' },
-  { to: '/godot',    label: 'Godot Learn',  icon: Brain,           color: 'text-ops-lime' },
-  { to: '/gamedev',  label: 'Game Dev',     icon: Gamepad2,        color: 'text-ops-amber' },
-  { to: '/safedays', label: 'Safe Days',    icon: Shield,          color: 'text-ops-green' },
-  { divider: true, label: 'TOOLS' },
-  { to: '/kaizen',   label: 'Kaizen',       icon: FlaskConical,    color: 'text-ops-cyan' },
-  { to: '/focus',    label: 'Focus',        icon: Timer,           color: 'text-ops-red' },
+// ─── Icon map for dynamic domain cards ───────────────────────────────────────
+const DOMAIN_ICON_MAP = {
+  Network, BookOpen, Shield, Gamepad2, Brain, Briefcase,
+  Code, Database, Globe, Server, Zap, Target, Star, Cpu,
+}
+
+// ─── Static nav sections ──────────────────────────────────────────────────────
+const TOP_NAV = [
+  { to: '/',            label: 'SITREP',      icon: LayoutDashboard, color: 'text-ops-green' },
+  { to: '/calendar',    label: 'Calendar',    icon: CalendarDays,    color: 'text-ops-blue' },
+  { to: '/battleplan',  label: 'Battle Plan', icon: Map,             color: 'text-ops-amber' },
+  { to: '/tasks',       label: 'Tasks',       icon: ListChecks,      color: 'text-ops-cyan' },
 ]
 
-function XPBar({ xp, level, xpProgress, nextLevelXp, currentLevelXp }) {
+const TOOLS_NAV = [
+  { to: '/kaizen', label: 'Kaizen', icon: FlaskConical, color: 'text-ops-cyan' },
+  { to: '/focus',  label: 'Focus',  icon: Timer,        color: 'text-ops-red' },
+]
+
+// ─── XP bar ───────────────────────────────────────────────────────────────────
+function XPBar({ xp, level, xpProgress, nextLevelXp }) {
   return (
     <div className="px-3 py-2 border-t border-bunker-700">
       <div className="flex items-center justify-between mb-1">
@@ -48,9 +53,49 @@ function XPBar({ xp, level, xpProgress, nextLevelXp, currentLevelXp }) {
   )
 }
 
+// ─── Nav link ─────────────────────────────────────────────────────────────────
+function NavItem({ to, label, icon: Icon, collapsed, accentHex }) {
+  const location = useLocation()
+  const active = location.pathname === to || (to !== '/' && location.pathname.startsWith(to))
+
+  const iconStyle = active && accentHex ? { color: accentHex } : {}
+  const dotStyle  = accentHex ? { backgroundColor: accentHex } : {}
+
+  return (
+    <NavLink
+      to={to}
+      title={collapsed ? label : undefined}
+      className={`flex items-center gap-2.5 px-2 py-2 rounded text-xs transition-all duration-150
+        ${active
+          ? 'bg-bunker-700 text-gray-100 border-l-2'
+          : 'text-gray-500 hover:bg-bunker-800 hover:text-gray-300 border-l-2 border-transparent'
+        }`}
+      style={active ? { borderLeftColor: accentHex || '#00ff88' } : {}}
+    >
+      {accentHex ? (
+        /* Domain card: colored dot instead of lucide icon */
+        <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+          <span className="w-2 h-2 rounded-full" style={dotStyle} />
+        </span>
+      ) : (
+        <Icon className={`w-4 h-4 flex-shrink-0`} style={iconStyle} />
+      )}
+      {!collapsed && <span className="truncate">{label}</span>}
+    </NavLink>
+  )
+}
+
+// ─── Section divider ──────────────────────────────────────────────────────────
+function Divider({ label, collapsed }) {
+  return collapsed
+    ? <div className="my-2 border-t border-bunker-700" />
+    : <div className="px-2 pt-3 pb-1 text-[9px] text-gray-600 uppercase tracking-widest">{label}</div>
+}
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
 export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(false)
-  const [synced, setSynced] = useState(true)
+  const [synced, setSynced]       = useState(true)
   const { state, level, xpProgress, nextLevelXp, currentLevelXp } = useStore()
   const { user, signOut } = useAuth()
   const location = useLocation()
@@ -62,6 +107,12 @@ export default function Layout({ children }) {
     const t = setTimeout(() => setSynced(true), 2000)
     return () => clearTimeout(t)
   }, [state])
+
+  // Derive display name: auth metadata → store profile name
+  const displayName = user?.user_metadata?.first_name || state.profile.name || 'USER'
+
+  // Dynamic domain cards from SITREP
+  const domainCards = state.sitrep?.cards || []
 
   return (
     <div className="flex h-screen overflow-hidden bg-bunker-950">
@@ -75,7 +126,7 @@ export default function Layout({ children }) {
           {!collapsed && (
             <div>
               <div className="text-ops-green font-bold text-sm tracking-widest">CMD CENTER</div>
-              <div className="text-[10px] text-gray-600 tracking-wider">// {state.profile.name}</div>
+              <div className="text-[10px] text-gray-600 tracking-wider">// {displayName}</div>
             </div>
           )}
           <button
@@ -88,32 +139,33 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2 space-y-0.5 px-1.5">
-          {NAV.map((item, i) => {
-            if (item.divider) {
-              return collapsed ? (
-                <div key={i} className="my-2 border-t border-bunker-700" />
-              ) : (
-                <div key={i} className="px-2 pt-3 pb-1 text-[9px] text-gray-600 uppercase tracking-widest">{item.label}</div>
-              )
-            }
-            const Icon = item.icon
-            const active = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                title={collapsed ? item.label : undefined}
-                className={`flex items-center gap-2.5 px-2 py-2 rounded text-xs transition-all duration-150
-                  ${active
-                    ? 'bg-bunker-700 text-gray-100 border-l-2 border-ops-green'
-                    : 'text-gray-500 hover:bg-bunker-800 hover:text-gray-300 border-l-2 border-transparent'
-                  }`}
-              >
-                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? item.color : ''}`} />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </NavLink>
-            )
-          })}
+          {/* Top static nav */}
+          {TOP_NAV.map(item => (
+            <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} collapsed={collapsed} />
+          ))}
+
+          {/* Dynamic Domains section */}
+          {domainCards.length > 0 && (
+            <>
+              <Divider label="Domains" collapsed={collapsed} />
+              {domainCards.map(card => (
+                <NavItem
+                  key={card.id}
+                  to={`/domain/${card.id}`}
+                  label={card.title}
+                  icon={DOMAIN_ICON_MAP[card.icon] || Star}
+                  collapsed={collapsed}
+                  accentHex={card.accentColor}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Tools section */}
+          <Divider label="Tools" collapsed={collapsed} />
+          {TOOLS_NAV.map(item => (
+            <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} collapsed={collapsed} />
+          ))}
         </nav>
 
         {/* XP Bar */}
