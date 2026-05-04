@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import {
   Plus, X, Edit3, Trash2, Check, Save, RotateCcw, Target,
-  Flame, ChevronDown, ChevronUp, Layers, Copy, AlertTriangle
+  Flame, ChevronDown, ChevronUp, Layers, Copy, AlertTriangle,
+  ChevronLeft, ChevronRight, CalendarDays
 } from 'lucide-react'
-import { format, startOfWeek, addDays } from 'date-fns'
+import { format, startOfWeek, addDays, subWeeks, addWeeks, isSameWeek } from 'date-fns'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,20 @@ function nb(b) {
 const blankBlockForm = () => ({
   text: '', category: 'workout', startTime: '', endTime: '', notes: '', selectedDays: [],
 })
+
+// ─── Week-keyed data helpers ──────────────────────────────────────────────────
+
+// Returns 'yyyy-MM-dd' of the Sunday that starts the week containing `date`
+function weekKey(date) {
+  return format(startOfWeek(date, { weekStartsOn: 0 }), 'yyyy-MM-dd')
+}
+
+// Ensures battlePlan.weeks[key] exists in a draft state (used inside update())
+function ensureWeek(s, key) {
+  if (!s.battlePlan.weeks) s.battlePlan.weeks = {}
+  if (!s.battlePlan.weeks[key]) s.battlePlan.weeks[key] = { days: {}, intention: '', intentionUpdatedAt: '' }
+  if (!s.battlePlan.weeks[key].days) s.battlePlan.weeks[key].days = {}
+}
 
 // Merge week days into template blocks (consolidates same activity across days)
 function weekToTemplateBlocks(days) {
@@ -761,31 +776,66 @@ function DayColumn({ day, date, isToday, blocks, selected, onSelect, onAdd }) {
 export default function BattlePlan() {
   const { state, update, addXp, ts } = useStore()
   const bp        = state.battlePlan || {}
-  const days      = bp.days || {}
   const templates = bp.templates || []
 
-  const [addModal, setAddModal]         = useState(null)   // null | day string
-  const [editModal, setEditModal]       = useState(null)   // { block, day }
+  // ── Week navigation ────────────────────────────────────────────────────────
+  const [viewDate, setViewDate]         = useState(new Date())
+  const [addModal, setAddModal]         = useState(null)
+  const [editModal, setEditModal]       = useState(null)
   const [selectedDay, setSelectedDay]   = useState(null)
-  const [tmplEditor, setTmplEditor]     = useState(null)   // null | template obj (empty={} for new)
+  const [tmplEditor, setTmplEditor]     = useState(null)
   const [saveAsModal, setSaveAsModal]   = useState(false)
 
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 })
-  const weekDates = DAYS.map((_, i) => format(addDays(weekStart, i), 'M/d'))
-  const todayName = format(new Date(), 'EEE')
+  const currentWeekKey = weekKey(new Date())
+  const viewWeekKey    = weekKey(viewDate)
+  const isCurrentWeek  = viewWeekKey === currentWeekKey
+  const isFutureWeek   = viewWeekKey > currentWeekKey
+
+  const viewWeekStart = startOfWeek(viewDate, { weekStartsOn: 0 })
+  const weekDates     = DAYS.map((_, i) => format(addDays(viewWeekStart, i), 'M/d'))
+  const todayName     = isCurrentWeek ? format(new Date(), 'EEE') : null
+
+  // ── One-time migration: flat days → weeks[key] ─────────────────────────────
+  useEffect(() => {
+    if (!bp.weeks && (bp.days || bp.intention)) {
+      update(s => {
+        const key = weekKey(new Date())
+        s.battlePlan.weeks = {
+          [key]: {
+            days:               s.battlePlan.days || {},
+            intention:          s.battlePlan.intention || '',
+            intentionUpdatedAt: s.battlePlan.intentionUpdatedAt || '',
+          }
+        }
+        // Keep old keys in place so nothing breaks if migration runs twice
+      })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Resolve week data ──────────────────────────────────────────────────────
+  // After migration, always read from weeks[key].
+  // Before migration (unlikely but safe), fall back to flat days for current week.
+  const weekData  = bp.weeks?.[viewWeekKey] || {}
+  const days      = weekData.days      || (isCurrentWeek && !bp.weeks ? bp.days || {} : {})
+  const intention = weekData.intention || (isCurrentWeek && !bp.weeks ? bp.intention || '' : '')
+  const intentionUpdatedAt = weekData.intentionUpdatedAt || (isCurrentWeek && !bp.weeks ? bp.intentionUpdatedAt : null)
 
   const blocksByDay = useMemo(() =>
     Object.fromEntries(DAYS.map(d => [d, (days[d] || []).map(nb)])),
   [days])
 
+  // ── Helpers that write to the correct week ─────────────────────────────────
+  const wk = viewWeekKey  // capture for closures
+
   // ── Week block handlers ────────────────────────────────────────────────────
 
   const saveNewBlocks = (form) => {
     update(s => {
+      ensureWeek(s, wk)
       form.selectedDays.forEach(day => {
         const block = { id: crypto.randomUUID(), text: form.text.trim(), category: form.category,
           startTime: form.startTime, endTime: form.endTime, notes: form.notes, done: false, at: ts() }
-        s.battlePlan.days[day] = [...(s.battlePlan.days[day] || []), block]
+        s.battlePlan.weeks[wk].days[day] = [...(s.battlePlan.weeks[wk].days[day] || []), block]
       })
     })
     addXp(form.selectedDays.length * 5, `Battle block: ${form.text}`)
@@ -794,7 +844,8 @@ export default function BattlePlan() {
 
   const saveEditBlock = (day, form) => {
     update(s => {
-      const arr = s.battlePlan.days[day] || []
+      ensureWeek(s, wk)
+      const arr = s.battlePlan.weeks[wk].days[day] || []
       const idx = arr.findIndex(b => b.id === form.id)
       if (idx >= 0) arr[idx] = { ...arr[idx], ...form, updatedAt: ts() }
     })
@@ -804,24 +855,35 @@ export default function BattlePlan() {
   const toggleDone = (day, id) => {
     const block = blocksByDay[day]?.find(b => b.id === id)
     update(s => {
-      const b = (s.battlePlan.days[day] || []).find(b => b.id === id)
+      ensureWeek(s, wk)
+      const b = (s.battlePlan.weeks[wk].days[day] || []).find(b => b.id === id)
       if (b) b.done = !b.done
     })
     if (block && !block.done) addXp(10, `Completed: ${block.text}`)
   }
 
   const deleteBlock = (day, id) => {
-    update(s => { s.battlePlan.days[day] = (s.battlePlan.days[day] || []).filter(b => b.id !== id) })
+    update(s => {
+      ensureWeek(s, wk)
+      s.battlePlan.weeks[wk].days[day] = (s.battlePlan.weeks[wk].days[day] || []).filter(b => b.id !== id)
+    })
   }
 
   const resetDone = () => {
-    update(s => { DAYS.forEach(day => {
-      s.battlePlan.days[day] = (s.battlePlan.days[day] || []).map(b => ({ ...b, done: false }))
-    }) })
+    update(s => {
+      ensureWeek(s, wk)
+      DAYS.forEach(day => {
+        s.battlePlan.weeks[wk].days[day] = (s.battlePlan.weeks[wk].days[day] || []).map(b => ({ ...b, done: false }))
+      })
+    })
   }
 
   const saveIntention = (text) => {
-    update(s => { s.battlePlan.intention = text; s.battlePlan.intentionUpdatedAt = ts() })
+    update(s => {
+      ensureWeek(s, wk)
+      s.battlePlan.weeks[wk].intention          = text
+      s.battlePlan.weeks[wk].intentionUpdatedAt = ts()
+    })
     addXp(5, 'Set weekly intention')
   }
 
@@ -829,13 +891,12 @@ export default function BattlePlan() {
 
   const saveTemplate = (data) => {
     update(s => {
-      const tmpl = s.battlePlan.templates || []
+      if (!s.battlePlan.templates) s.battlePlan.templates = []
       if (tmplEditor?.id) {
-        const idx = tmpl.findIndex(t => t.id === tmplEditor.id)
-        if (idx >= 0) tmpl[idx] = { ...tmpl[idx], ...data, updatedAt: ts() }
+        const idx = s.battlePlan.templates.findIndex(t => t.id === tmplEditor.id)
+        if (idx >= 0) s.battlePlan.templates[idx] = { ...s.battlePlan.templates[idx], ...data, updatedAt: ts() }
       } else {
-        tmpl.push({ id: crypto.randomUUID(), ...data, createdAt: ts() })
-        s.battlePlan.templates = tmpl
+        s.battlePlan.templates.push({ id: crypto.randomUUID(), ...data, createdAt: ts() })
       }
     })
     addXp(15, `Template saved: ${data.name}`)
@@ -848,13 +909,14 @@ export default function BattlePlan() {
 
   const applyTemplate = (template, mode) => {
     update(s => {
-      if (mode === 'replace') DAYS.forEach(day => { s.battlePlan.days[day] = [] })
+      ensureWeek(s, wk)
+      if (mode === 'replace') DAYS.forEach(day => { s.battlePlan.weeks[wk].days[day] = [] })
       template.blocks.forEach(block => {
         block.selectedDays.forEach(day => {
           const newBlock = { id: crypto.randomUUID(), text: block.text, category: block.category,
             startTime: block.startTime, endTime: block.endTime, notes: block.notes,
             done: false, at: ts(), fromTemplate: template.id }
-          s.battlePlan.days[day] = [...(s.battlePlan.days[day] || []), newBlock]
+          s.battlePlan.weeks[wk].days[day] = [...(s.battlePlan.weeks[wk].days[day] || []), newBlock]
         })
       })
     })
@@ -865,9 +927,8 @@ export default function BattlePlan() {
     const blocks = weekToTemplateBlocks(days)
     if (!blocks.length) return
     update(s => {
-      const tmpl = s.battlePlan.templates || []
-      tmpl.push({ id: crypto.randomUUID(), name, blocks, createdAt: ts() })
-      s.battlePlan.templates = tmpl
+      if (!s.battlePlan.templates) s.battlePlan.templates = []
+      s.battlePlan.templates.push({ id: crypto.randomUUID(), name, blocks, createdAt: ts() })
     })
     addXp(15, `Template saved: ${name}`)
     setSaveAsModal(false)
@@ -875,6 +936,14 @@ export default function BattlePlan() {
 
   const selectedDayBlocks = selectedDay ? blocksByDay[selectedDay] || [] : []
   const selectedDayDate   = selectedDay ? weekDates[DAYS.indexOf(selectedDay)] : ''
+
+  // ── Week label ─────────────────────────────────────────────────────────────
+  const weeksFromNow = Math.round((viewWeekStart - startOfWeek(new Date(), { weekStartsOn: 0 })) / (7 * 864e5))
+  const weekLabel = weeksFromNow === 0 ? 'This Week'
+    : weeksFromNow === 1 ? 'Next Week'
+    : weeksFromNow === -1 ? 'Last Week'
+    : weeksFromNow > 0 ? `${weeksFromNow} weeks from now`
+    : `${Math.abs(weeksFromNow)} weeks ago`
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -898,9 +967,6 @@ export default function BattlePlan() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-bold text-ops-amber tracking-widest">// WEEKLY BATTLE PLAN</h1>
-          <p className="text-xs text-gray-600 mt-0.5">
-            Week of {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d, yyyy')}
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={resetDone} className="ops-btn-ghost flex items-center gap-1.5 text-xs">
@@ -912,8 +978,67 @@ export default function BattlePlan() {
         </div>
       </div>
 
+      {/* Week navigation bar */}
+      <div className="ops-card py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => { setViewDate(d => subWeeks(d, 1)); setSelectedDay(null) }}
+            className="ops-btn-ghost p-1.5 flex-shrink-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          <div className="flex-1 text-center">
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <CalendarDays className="w-3.5 h-3.5 text-ops-amber flex-shrink-0" />
+              <span className="text-sm font-bold text-gray-100">
+                {format(viewWeekStart, 'MMM d')} – {format(addDays(viewWeekStart, 6), 'MMM d, yyyy')}
+              </span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+                isCurrentWeek
+                  ? 'border-ops-green/50 text-ops-green bg-ops-green/10'
+                  : isFutureWeek
+                  ? 'border-ops-blue/50 text-ops-blue bg-ops-blue/10'
+                  : 'border-bunker-600 text-gray-500'
+              }`}>
+                {weekLabel}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {!isCurrentWeek && (
+              <button
+                onClick={() => { setViewDate(new Date()); setSelectedDay(null) }}
+                className="ops-btn-ghost text-[10px] px-2 py-1"
+              >
+                Today
+              </button>
+            )}
+            <button
+              onClick={() => { setViewDate(d => addWeeks(d, 1)); setSelectedDay(null) }}
+              className="ops-btn-ghost p-1.5"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Future week hint */}
+      {isFutureWeek && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded border border-ops-blue/30 bg-ops-blue/5 text-xs text-ops-blue">
+          <CalendarDays className="w-3.5 h-3.5 flex-shrink-0" />
+          Planning ahead for {weekLabel}. Blocks added here won't affect your current week.
+        </div>
+      )}
+
       {/* Intention */}
-      <IntentionCard intention={bp.intention || ''} updatedAt={bp.intentionUpdatedAt} onSave={saveIntention} />
+      <IntentionCard
+        intention={intention}
+        updatedAt={intentionUpdatedAt}
+        onSave={saveIntention}
+      />
 
       {/* Stats */}
       <StatsBar days={days} />
@@ -921,9 +1046,12 @@ export default function BattlePlan() {
       {/* 7-day grid */}
       <div className="grid grid-cols-7 gap-2">
         {DAYS.map((day, di) => (
-          <DayColumn key={day} day={day} date={weekDates[di]} isToday={day === todayName}
-            blocks={blocksByDay[day] || []} selected={selectedDay === day}
-            onSelect={setSelectedDay} onAdd={d => setAddModal(d)} />
+          <DayColumn key={day} day={day} date={weekDates[di]}
+            isToday={day === todayName}
+            blocks={blocksByDay[day] || []}
+            selected={selectedDay === day}
+            onSelect={setSelectedDay}
+            onAdd={d => setAddModal(d)} />
         ))}
       </div>
 
