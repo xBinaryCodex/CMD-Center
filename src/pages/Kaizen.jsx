@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { FlaskConical, Plus, Trash2, ChevronDown, ChevronUp, Tag } from 'lucide-react'
+import { FlaskConical, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { format, parseISO, startOfDay, isToday, isYesterday, subDays, isAfter } from 'date-fns'
 
-const AREAS = ['Boeing','WGU','Safe Days','Game Dev','Godot','Personal','Health','Mindset','Skill']
+// Life areas — universal, not tied to any domain
+const AREAS = ['Health','Mindset','Technical','Skill','Creative','Habits','Communication','Leadership','Personal']
+
 const AREA_COLORS = {
-  'Boeing':    'bg-ops-blue/20 text-ops-blue border-ops-blue/30',
-  'WGU':       'bg-ops-purple/20 text-ops-purple border-ops-purple/30',
-  'Safe Days': 'bg-ops-green/20 text-ops-green border-ops-green/30',
-  'Game Dev':  'bg-ops-amber/20 text-ops-amber border-ops-amber/30',
-  'Godot':     'bg-ops-lime/20 text-ops-lime border-ops-lime/30',
-  'Personal':  'bg-gray-500/20 text-gray-400 border-gray-500/30',
-  'Health':    'bg-red-500/20 text-red-400 border-red-500/30',
-  'Mindset':   'bg-ops-cyan/20 text-ops-cyan border-ops-cyan/30',
-  'Skill':     'bg-ops-purple/20 text-ops-purple border-ops-purple/30',
+  'Health':        'bg-ops-green/20 text-ops-green border-ops-green/30',
+  'Mindset':       'bg-ops-cyan/20 text-ops-cyan border-ops-cyan/30',
+  'Technical':     'bg-ops-blue/20 text-ops-blue border-ops-blue/30',
+  'Skill':         'bg-ops-purple/20 text-ops-purple border-ops-purple/30',
+  'Creative':      'bg-ops-amber/20 text-ops-amber border-ops-amber/30',
+  'Habits':        'bg-ops-lime/20 text-ops-lime border-ops-lime/30',
+  'Communication': 'bg-ops-cyan/20 text-ops-cyan border-ops-cyan/30',
+  'Leadership':    'bg-red-500/20 text-red-400 border-red-500/30',
+  'Personal':      'bg-gray-500/20 text-gray-400 border-gray-500/30',
 }
 
 function JournalEntry({ entry, onDelete }) {
@@ -76,12 +78,12 @@ export default function Kaizen() {
   const { state, update, addXp, ts } = useStore()
   const entries = state.kaizen || []
 
-  const [what, setWhat] = useState('')
-  const [why, setWhy] = useState('')
+  const [what, setWhat]             = useState('')
+  const [why, setWhy]               = useState('')
   const [improvement, setImprovement] = useState('')
-  const [lesson, setLesson] = useState('')
-  const [area, setArea] = useState('Personal')
-  const [filter, setFilter] = useState('all')
+  const [lesson, setLesson]         = useState('')
+  const [area, setArea]             = useState('Personal')
+  const [filter, setFilter]         = useState('all')
 
   const submit = () => {
     if (!what.trim()) return
@@ -98,8 +100,8 @@ export default function Kaizen() {
 
   const filtered = entries.filter(e => {
     if (filter === 'today') return isToday(parseISO(e.at))
-    if (filter === '7d') return isAfter(parseISO(e.at), subDays(new Date(), 7))
-    if (filter !== 'all') return e.area === filter
+    if (filter === '7d')    return isAfter(parseISO(e.at), subDays(new Date(), 7))
+    if (filter !== 'all')   return e.area === filter
     return true
   })
 
@@ -130,31 +132,33 @@ export default function Kaizen() {
         <div className="section-title"><Plus className="w-3.5 h-3.5 text-ops-cyan" /> New Entry</div>
         <div>
           <label className="ops-label">What happened / what did you observe? *</label>
-          <textarea className="ops-textarea min-h-[70px]" value={what} onChange={e => setWhat(e.target.value)} placeholder="Describe the situation, what you noticed, what went well or not…" />
+          <textarea className="ops-textarea min-h-[70px]" value={what} onChange={e => setWhat(e.target.value)}
+            placeholder="Describe the situation, what you noticed, what went well or not…" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="ops-label">Why does it matter?</label>
-            <textarea className="ops-textarea min-h-[56px]" value={why} onChange={e => setWhy(e.target.value)} placeholder="Root cause, significance…" />
+            <textarea className="ops-textarea min-h-[56px]" value={why} onChange={e => setWhy(e.target.value)}
+              placeholder="Root cause, significance…" />
           </div>
           <div>
             <label className="ops-label">Improvement / Action</label>
-            <textarea className="ops-textarea min-h-[56px]" value={improvement} onChange={e => setImprovement(e.target.value)} placeholder="What will you do differently?" />
+            <textarea className="ops-textarea min-h-[56px]" value={improvement} onChange={e => setImprovement(e.target.value)}
+              placeholder="What will you do differently?" />
           </div>
         </div>
         <div>
           <label className="ops-label">Lesson Learned (1 sentence)</label>
-          <input className="ops-input" value={lesson} onChange={e => setLesson(e.target.value)} placeholder="The key takeaway…" onKeyDown={e => e.key === 'Enter' && submit()} />
+          <input className="ops-input" value={lesson} onChange={e => setLesson(e.target.value)}
+            placeholder="The key takeaway…" onKeyDown={e => e.key === 'Enter' && submit()} />
         </div>
         <div>
-          <label className="ops-label">Area</label>
+          <label className="ops-label">Life Area</label>
           <div className="flex flex-wrap gap-1.5">
             {AREAS.map(a => (
-              <button
-                key={a}
-                onClick={() => setArea(a)}
-                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${area === a ? AREA_COLORS[a] : 'border-bunker-600 text-gray-600'}`}
-              >
+              <button key={a} onClick={() => setArea(a)}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all
+                  ${area === a ? AREA_COLORS[a] : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}>
                 {a}
               </button>
             ))}
@@ -165,13 +169,15 @@ export default function Kaizen() {
 
       {/* Filter */}
       <div className="flex flex-wrap gap-2">
-        {[{ id:'all',label:'All'},{id:'today',label:'Today'},{id:'7d',label:'Last 7d'},...AREAS.map(a=>({id:a,label:a}))].map(f => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
+        {[
+          { id: 'all',   label: 'All' },
+          { id: 'today', label: 'Today' },
+          { id: '7d',    label: 'Last 7d' },
+          ...AREAS.map(a => ({ id: a, label: a }))
+        ].map(f => (
+          <button key={f.id} onClick={() => setFilter(f.id)}
             className={`text-[10px] px-2 py-0.5 rounded border transition-colors
-              ${filter === f.id ? 'border-ops-cyan/60 bg-ops-cyan/10 text-ops-cyan' : 'border-bunker-700 text-gray-600 hover:border-gray-500'}`}
-          >
+              ${filter === f.id ? 'border-ops-cyan/60 bg-ops-cyan/10 text-ops-cyan' : 'border-bunker-700 text-gray-600 hover:border-gray-500'}`}>
             {f.label}
           </button>
         ))}

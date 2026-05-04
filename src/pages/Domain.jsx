@@ -548,9 +548,13 @@ export default function Domain() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { state, update, addXp, ts } = useStore()
-  const [projTab, setProjTab] = useState('notes')
-  const [newProjName, setNewProjName] = useState('')
-  const [showAddProj, setShowAddProj] = useState(false)
+  const [projTab, setProjTab]             = useState('notes')
+  const [newProjName, setNewProjName]     = useState('')
+  const [showAddProj, setShowAddProj]     = useState(false)
+  const [renamingProj, setRenamingProj]   = useState(false)
+  const [projNameDraft, setProjNameDraft] = useState('')
+  const [editingLabel, setEditingLabel]   = useState(false)
+  const [labelDraft, setLabelDraft]       = useState('')
 
   const card = state.sitrep?.cards?.find(c => c.id === id)
 
@@ -737,6 +741,31 @@ export default function Domain() {
               <Target className="w-3.5 h-3.5" /> {label}s
             </div>
 
+            {/* Editable label */}
+            <div className="flex items-center gap-1 mb-1">
+              {editingLabel ? (
+                <div className="flex gap-1 flex-1">
+                  <input className="ops-input flex-1 text-xs py-0.5" value={labelDraft} autoFocus
+                    onChange={e => setLabelDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { setCard({ projectLabel: labelDraft }); setEditingLabel(false) }
+                      if (e.key === 'Escape') setEditingLabel(false)
+                    }} />
+                  <button onClick={() => { setCard({ projectLabel: labelDraft }); setEditingLabel(false) }} className="ops-btn-primary py-0.5 px-2"><Check className="w-3 h-3" /></button>
+                  <button onClick={() => setEditingLabel(false)} className="ops-btn-ghost py-0.5 px-2"><X className="w-3 h-3" /></button>
+                </div>
+              ) : (
+                <button
+                  className="ops-label mb-0 flex items-center gap-1 group hover:text-gray-300 transition-colors"
+                  onClick={() => { setLabelDraft(label); setEditingLabel(true) }}
+                  title={`Rename "${label}"`}
+                >
+                  Active {label}
+                  <Edit3 className="w-2.5 h-2.5 text-gray-700 group-hover:text-ops-green transition-colors" />
+                </button>
+              )}
+            </div>
+
             {/* Project selector */}
             <div className="flex gap-2">
               <select className="ops-input flex-1 text-sm"
@@ -744,6 +773,14 @@ export default function Domain() {
                 onChange={e => { setCard({ activeProjectId: e.target.value }); setProjTab('notes') }}>
                 {projects.map(p => <option key={p.id} value={p.id} className="bg-bunker-800">{p.name}</option>)}
               </select>
+              {/* Rename current entry */}
+              {activeProj && (
+                <button onClick={() => { setProjNameDraft(activeProj.name); setRenamingProj(true) }}
+                  title={`Rename this ${label}`}
+                  className="ops-btn border rounded px-2.5 py-2 transition-colors border-bunker-600 text-gray-600 hover:border-gray-500 hover:text-gray-300">
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button onClick={() => setShowAddProj(s => !s)} title={`Add ${label}`}
                 className="ops-btn border rounded px-3 py-2 transition-all"
                 style={{ backgroundColor: a.bg12, color: a.color, borderColor: a.bd30 }}>
@@ -757,8 +794,22 @@ export default function Domain() {
               )}
             </div>
 
+            {/* Rename current project */}
+            {renamingProj && (
+              <div className="flex gap-2 mt-2">
+                <input className="ops-input flex-1 text-sm" placeholder={`Rename ${label}…`}
+                  value={projNameDraft} onChange={e => setProjNameDraft(e.target.value)} autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { updateActiveProj({ name: projNameDraft }); setRenamingProj(false) }
+                    if (e.key === 'Escape') setRenamingProj(false)
+                  }} />
+                <button onClick={() => { updateActiveProj({ name: projNameDraft }); setRenamingProj(false) }} className="ops-btn-primary"><Check className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setRenamingProj(false)} className="ops-btn-ghost"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
+
             {showAddProj && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-2">
                 <input className="ops-input flex-1 text-sm" placeholder={`${label} name…`}
                   value={newProjName} onChange={e => setNewProjName(e.target.value)} autoFocus
                   onKeyDown={e => { if (e.key === 'Enter') addProject(); if (e.key === 'Escape') setShowAddProj(false) }} />

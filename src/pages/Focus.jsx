@@ -11,7 +11,7 @@ const PRESETS = [
   { label: '15m break', seconds: 15 * 60, type: 'break' },
 ]
 
-const SUBJECTS = ['Boeing','WGU','Safe Days','Game Dev','Godot','Arista','Personal']
+const PERSONAL_SUBJECT = { id: 'personal', title: 'Personal', accentColor: '#6b7280' }
 
 function formatTime(s) {
   const m = Math.floor(s / 60)
@@ -42,11 +42,15 @@ export default function Focus() {
   const { state, update, addXp, ts } = useStore()
   const sessions = state.focusSessions || []
 
+  // Dynamic subjects from SITREP cards + Personal fallback
+  const domainSubjects = state.sitrep?.cards || []
+  const allSubjects = [...domainSubjects, PERSONAL_SUBJECT]
+
   const [totalSeconds, setTotalSeconds] = useState(25 * 60)
   const [remaining, setRemaining] = useState(25 * 60)
   const [running, setRunning] = useState(false)
   const [focusLabel, setFocusLabel] = useState('')
-  const [subject, setSubject] = useState('Boeing')
+  const [subject, setSubject] = useState(() => domainSubjects[0]?.title || 'Personal')
   const [sessionType, setSessionType] = useState('work')
   const [startedAt, setStartedAt] = useState(null)
   const [showLogs, setShowLogs] = useState(true)
@@ -198,16 +202,26 @@ export default function Focus() {
             onChange={e => setFocusLabel(e.target.value)}
           />
           <div className="flex flex-wrap gap-1.5 justify-center">
-            {SUBJECTS.map(s => (
-              <button
-                key={s}
-                onClick={() => setSubject(s)}
-                className={`text-[10px] px-2 py-0.5 rounded border transition-colors
-                  ${subject === s ? 'border-ops-red/60 bg-ops-red/10 text-ops-red' : 'border-bunker-600 text-gray-600'}`}
-              >
-                {s}
-              </button>
-            ))}
+            {allSubjects.map(s => {
+              const isActive = subject === s.title
+              const hex = s.accentColor || '#6b7280'
+              const [r,g,b] = [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)]
+              const activeStyle = isActive
+                ? { borderColor: `rgba(${r},${g},${b},0.6)`, backgroundColor: `rgba(${r},${g},${b},0.12)`, color: `rgb(${r},${g},${b})` }
+                : {}
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSubject(s.title)}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors flex items-center gap-1
+                    ${isActive ? '' : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}
+                  style={activeStyle}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: hex }} />
+                  {s.title}
+                </button>
+              )
+            })}
           </div>
         </div>
 
