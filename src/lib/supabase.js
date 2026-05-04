@@ -27,3 +27,11 @@ export async function upsertRemoteData(userId, data) {
     .upsert({ user_id: userId, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
   if (error) throw error
 }
+
+export async function deleteUserData(userId) {
+  const { error } = await supabase
+    .from('user_data')
+    .delete()
+    .eq('user_id', userId)
+  if (error) throw error
+}
