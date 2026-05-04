@@ -126,7 +126,7 @@ export default function Layout({ children }) {
           {!collapsed && (
             <div>
               <div className="text-ops-green font-bold text-sm tracking-widest">CMD CENTER</div>
-              <div className="text-[10px] text-gray-600 tracking-wider">// {displayName}</div>
+              <div className="text-[10px] text-gray-600 tracking-wider">// {displayName.toUpperCase()}</div>
             </div>
           )}
           <button

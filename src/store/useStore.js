@@ -18,6 +18,63 @@ function levelFromXp(xp) {
 // ─── Default SITREP cards ─────────────────────────────────────────────────
 
 export function buildDefaultCards() {
+  // Generic starter domains for new users — not personal to any one person
+  return [
+    {
+      id: 'work',
+      title: 'Work',
+      icon: 'Briefcase',
+      accentColor: '#38bdf8',
+      status: 'Active',
+      order: 0,
+      collapsed: false,
+      tagline: 'Your primary work domain',
+      hasProjects: true,
+      projectLabel: 'Project',
+      activeProjectId: 'work-p1',
+      projects: [
+        {
+          id: 'work-p1',
+          name: 'First Project',
+          notes: [{ id: 'note-w1', text: 'Welcome! Add notes, objectives, and track events for this project.', at: new Date().toISOString() }],
+          objectives: [],
+        }
+      ],
+      notes: [],
+      objectives: [],
+      resources: [],
+      milestones: [],
+    },
+    {
+      id: 'learning',
+      title: 'Learning',
+      icon: 'BookOpen',
+      accentColor: '#a78bfa',
+      status: 'In Progress',
+      order: 1,
+      collapsed: false,
+      tagline: 'Courses, certifications, and skill development',
+      hasProjects: true,
+      projectLabel: 'Course',
+      activeProjectId: 'learn-c1',
+      projects: [
+        {
+          id: 'learn-c1',
+          name: 'My First Course',
+          notes: [{ id: 'note-l1', text: 'Track your progress here — add objectives for each module and notes as you go.', at: new Date().toISOString() }],
+          objectives: [],
+        }
+      ],
+      notes: [],
+      objectives: [],
+      resources: [],
+      milestones: [],
+    },
+  ]
+}
+
+// Jose's personal domains — used only to seed his own account, NOT for new signups
+export function buildJoseCards() {
   return [
     {
       id: 'boeing',
@@ -37,6 +94,8 @@ export function buildDefaultCards() {
       ],
       notes: [],
       objectives: [],
+      resources: [],
+      milestones: [],
     },
     {
       id: 'wgu',
@@ -58,6 +117,8 @@ export function buildDefaultCards() {
       ],
       notes: [],
       objectives: [],
+      resources: [],
+      milestones: [],
     },
     {
       id: 'safedays',
@@ -76,6 +137,8 @@ export function buildDefaultCards() {
       ],
       notes: [],
       objectives: [],
+      resources: [],
+      milestones: [],
     },
     {
       id: 'gamedev',
@@ -95,6 +158,8 @@ export function buildDefaultCards() {
       ],
       notes: [],
       objectives: [],
+      resources: [],
+      milestones: [],
     },
     {
       id: 'gdquest',
@@ -113,6 +178,8 @@ export function buildDefaultCards() {
       ],
       notes: [],
       objectives: [],
+      resources: [],
+      milestones: [],
     },
   ]
 }

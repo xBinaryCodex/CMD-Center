@@ -6,6 +6,7 @@ import Sitrep from './pages/Sitrep'
 import Calendar from './pages/Calendar'
 import BattlePlan from './pages/BattlePlan'
 import Tasks from './pages/Tasks'
+import Domain from './pages/Domain'
 import WGU from './pages/WGU'
 import Boeing from './pages/Boeing'
 import Godot from './pages/Godot'
@@ -19,18 +20,19 @@ function ProtectedRoutes() {
   return (
     <Layout>
       <Routes>
-        <Route path="/"           element={<Sitrep />} />
-        <Route path="/calendar"   element={<Calendar />} />
-        <Route path="/battleplan" element={<BattlePlan />} />
-        <Route path="/tasks"      element={<Tasks />} />
-        <Route path="/wgu"        element={<WGU />} />
-        <Route path="/boeing"     element={<Boeing />} />
-        <Route path="/godot"      element={<Godot />} />
-        <Route path="/gamedev"    element={<GameDev />} />
-        <Route path="/safedays"   element={<SafeDays />} />
-        <Route path="/kaizen"     element={<Kaizen />} />
-        <Route path="/focus"      element={<Focus />} />
-        <Route path="*"           element={<Navigate to="/" replace />} />
+        <Route path="/"              element={<Sitrep />} />
+        <Route path="/calendar"      element={<Calendar />} />
+        <Route path="/battleplan"    element={<BattlePlan />} />
+        <Route path="/tasks"         element={<Tasks />} />
+        <Route path="/domain/:id"    element={<Domain />} />
+        <Route path="/wgu"           element={<WGU />} />
+        <Route path="/boeing"        element={<Boeing />} />
+        <Route path="/godot"         element={<Godot />} />
+        <Route path="/gamedev"       element={<GameDev />} />
+        <Route path="/safedays"      element={<SafeDays />} />
+        <Route path="/kaizen"        element={<Kaizen />} />
+        <Route path="/focus"         element={<Focus />} />
+        <Route path="*"              element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
   )
