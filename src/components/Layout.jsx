@@ -8,6 +8,7 @@ import {
   ChevronRight, ChevronLeft, Shield, Zap, Trophy,
   Brain, Map, Cloud, CloudOff, LogOut,
   Code, Database, Globe, Server, Star, Cpu, Target,
+  Sun, Moon,
 } from 'lucide-react'
 
 // ─── Icon map for dynamic domain cards ───────────────────────────────────────
@@ -96,10 +97,17 @@ function Divider({ label, collapsed }) {
 export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(false)
   const [synced, setSynced]       = useState(true)
+  const [theme, setTheme] = useState(() => localStorage.getItem('cmdcenter_theme') || 'dark')
   const { state, level, xpProgress, nextLevelXp, currentLevelXp } = useStore()
   const { user, signOut } = useAuth()
   const location = useLocation()
   const now = new Date()
+
+  // Apply theme class to <html> and persist
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', theme === 'light')
+    localStorage.setItem('cmdcenter_theme', theme)
+  }, [theme])
 
   // Flash sync indicator whenever state changes
   useEffect(() => {
@@ -126,7 +134,7 @@ export default function Layout({ children }) {
           {!collapsed && (
             <div>
               <div className="text-ops-green font-bold text-sm tracking-widest">CMD CENTER</div>
-              <div className="text-[10px] text-gray-600 tracking-wider">// {displayName.toUpperCase()}</div>
+              <div className="text-[10px] text-gray-400 tracking-wider">// {displayName.toUpperCase()}</div>
             </div>
           )}
           <button
@@ -202,6 +210,17 @@ export default function Layout({ children }) {
                 {synced ? 'SYNCED' : 'SYNCING'}
               </span>
             </div>
+            {/* Theme toggle */}
+            <button
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="text-gray-500 hover:text-ops-amber transition-colors"
+            >
+              {theme === 'dark'
+                ? <Sun className="w-3.5 h-3.5" />
+                : <Moon className="w-3.5 h-3.5" />
+              }
+            </button>
             {/* Sign out */}
             <button
               onClick={signOut}

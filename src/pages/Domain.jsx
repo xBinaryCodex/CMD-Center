@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import {
@@ -118,10 +118,11 @@ function InlineEdit({ value, onSave, placeholder, multiline, className }) {
 // ─── Notes feed ───────────────────────────────────────────────────────────────
 
 function NotesFeed({ notes, onAdd, onDelete, hex }) {
-  const [text, setText] = useState('')
-  const [showAll, setShowAll] = useState(false)
+  const [text, setText]           = useState('')
+  const [visibleCount, setVisibleCount] = useState(10)
   const a = ac(hex)
-  const visible = showAll ? notes : notes.slice(0, 5)
+  const visible = notes.slice(0, visibleCount)
+  const hasMore = notes.length > visibleCount
 
   const submit = () => {
     if (!text.trim()) return
@@ -165,12 +166,22 @@ function NotesFeed({ notes, onAdd, onDelete, hex }) {
         ))}
       </div>
 
-      {notes.length > 5 && (
-        <button onClick={() => setShowAll(s => !s)}
+      {hasMore && (
+        <div className="flex gap-3">
+          <button onClick={() => setVisibleCount(c => c + 10)}
+            className="text-[10px] text-gray-600 hover:text-gray-300 flex items-center gap-1 transition-colors">
+            <ChevronDown className="w-3 h-3" /> Load 10 more
+          </button>
+          <button onClick={() => setVisibleCount(notes.length)}
+            className="text-[10px] text-gray-600 hover:text-gray-300 transition-colors">
+            Show all ({notes.length})
+          </button>
+        </div>
+      )}
+      {visibleCount > 10 && notes.length > 10 && (
+        <button onClick={() => setVisibleCount(10)}
           className="text-[10px] text-gray-600 hover:text-gray-300 flex items-center gap-1 transition-colors">
-          {showAll
-            ? <><ChevronUp className="w-3 h-3" /> Show less</>
-            : <><ChevronDown className="w-3 h-3" /> {notes.length - 5} older notes</>}
+          <ChevronUp className="w-3 h-3" /> Show less
         </button>
       )}
     </div>
@@ -239,12 +250,19 @@ function ObjectivesList({ objectives, onAdd, onToggle, onDelete, onToggleCritica
             {showDone ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {showDone && done.map(obj => (
-            <div key={obj.id} className="flex items-center gap-2 p-1.5 opacity-40 group">
-              <div className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex items-center justify-center flex-shrink-0">
+            <div key={obj.id} className="flex items-start gap-2 p-1.5 opacity-50 group">
+              <div className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Check className="w-2.5 h-2.5 text-ops-green" />
               </div>
-              <span className="text-xs text-gray-500 flex-1 line-through">{obj.text}</span>
-              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100">
+              <div className="flex-1 min-w-0">
+                <span className="text-xs text-gray-500 line-through block">{obj.text}</span>
+                {obj.doneAt && (
+                  <span className="text-[9px] text-ops-green/60">
+                    ✓ {format(parseISO(obj.doneAt), 'MMM d yyyy · HH:mm')}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5">
                 <Trash2 className="w-3 h-3 text-gray-600 hover:text-ops-red" />
               </button>
             </div>
@@ -923,9 +941,9 @@ export default function Domain() {
               <div className="section-title" style={a.text}>
                 <CalendarDays className="w-3.5 h-3.5" /> Events
               </div>
-              <button onClick={() => navigate('/calendar')}
+              <button onClick={() => navigate(`/calendar?new=1&subject=${card.id}`)}
                 className="text-[10px] text-gray-600 hover:text-gray-300 transition-colors flex items-center gap-1">
-                Open Calendar <ExternalLink className="w-2.5 h-2.5" />
+                + Add Event <ExternalLink className="w-2.5 h-2.5" />
               </button>
             </div>
             <EventsPanel cardId={card.id} hex={card.accentColor} />

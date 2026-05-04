@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore, buildDefaultCards } from '../store/useStore'
 import {
   Network, BookOpen, Shield, Gamepad2, Brain, Briefcase, Code,
@@ -173,13 +174,20 @@ function CardObjectives({ objectives = [], onAdd, onToggle, onDelete, onToggleCr
             {showDone ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {showDone && done.map(obj => (
-            <div key={obj.id} className="flex items-center gap-2 p-1.5 opacity-40 group">
+            <div key={obj.id} className="flex items-start gap-2 p-1.5 opacity-50 group">
               <button onClick={() => onToggle(obj.id)}
-                className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex items-center justify-center flex-shrink-0">
+                className="w-4 h-4 rounded border border-ops-green bg-ops-green/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Check className="w-2.5 h-2.5 text-ops-green" />
               </button>
-              <span className="text-xs text-gray-500 flex-1 line-through">{obj.text}</span>
-              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100">
+              <div className="flex-1 min-w-0">
+                <span className="text-xs text-gray-500 line-through block">{obj.text}</span>
+                {obj.doneAt && (
+                  <span className="text-[9px] text-ops-green/60">
+                    ✓ {format(parseISO(obj.doneAt), 'MMM d yyyy · HH:mm')}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => onDelete(obj.id)} className="opacity-0 group-hover:opacity-100 flex-shrink-0 mt-0.5">
                 <Trash2 className="w-3 h-3 text-gray-600 hover:text-ops-red" />
               </button>
             </div>
@@ -202,6 +210,7 @@ function normalizeEvent(ev) {
 
 function CardEvents({ cardId, hex }) {
   const { state } = useStore()
+  const navigate = useNavigate()
   const a = ac(hex)
   const today = startOfDay(new Date())
 
@@ -221,14 +230,23 @@ function CardEvents({ cardId, hex }) {
       .slice(0, 20)
   }, [state.calendarEvents, cardId])
 
-  if (events.length === 0) {
-    return <p className="text-[11px] text-gray-700 italic">No upcoming events for this domain.</p>
-  }
-
   const PRIORITY_COLORS = { critical: '#ef4444', high: '#f59e0b', normal: '#6b7280', low: '#374151' }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
+      {/* Add Event shortcut */}
+      <button
+        onClick={() => navigate(`/calendar?new=1&subject=${cardId}`)}
+        className="flex items-center gap-1.5 text-[10px] w-full justify-center border rounded px-3 py-1.5 transition-all"
+        style={{ backgroundColor: a.bg06, color: a.color, borderColor: a.bd30 }}
+      >
+        <CalendarDays className="w-3 h-3" /> Add Event to Calendar
+      </button>
+
+      {events.length === 0 && (
+        <p className="text-[11px] text-gray-700 italic">No upcoming events for this domain.</p>
+      )}
+
       {events.map(ev => {
         const pColor = PRIORITY_COLORS[ev.priority] || PRIORITY_COLORS.normal
         return (

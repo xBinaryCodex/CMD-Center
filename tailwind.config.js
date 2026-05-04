@@ -7,12 +7,13 @@ export default {
   theme: {
     extend: {
       colors: {
+        // CSS-variable backed so light/dark theme can swap all backgrounds at once
         bunker: {
-          950: '#020408',
-          900: '#060d14',
-          800: '#0a1520',
-          700: '#0f1f2e',
-          600: '#162840',
+          950: 'var(--bunker-950, #020408)',
+          900: 'var(--bunker-900, #060d14)',
+          800: 'var(--bunker-800, #0a1520)',
+          700: 'var(--bunker-700, #0f1f2e)',
+          600: 'var(--bunker-600, #162840)',
         },
         ops: {
           green:  '#00ff88',

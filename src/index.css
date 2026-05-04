@@ -4,6 +4,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Dark theme (default) — bunker CSS variables ────────────────────────── */
+
+:root {
+  --bunker-950: #020408;
+  --bunker-900: #060d14;
+  --bunker-800: #0a1520;
+  --bunker-700: #0f1f2e;
+  --bunker-600: #162840;
+}
+
+/* ─── Light theme — applied when <html class="light"> ────────────────────── */
+
+html.light {
+  --bunker-950: #eef2f7;
+  --bunker-900: #f5f7fa;
+  --bunker-800: #ffffff;
+  --bunker-700: #dde3ec;
+  --bunker-600: #c8d0de;
+}
+
+/* Flip primary content text (gray-100/200/300 are white-ish, must become dark) */
+html.light .text-gray-100 { color: #0f172a !important; }
+html.light .text-gray-200 { color: #1e293b !important; }
+html.light .text-gray-300 { color: #334155 !important; }
+
+/* Input text + placeholder in light mode */
+html.light .ops-input  { color: #1e293b; }
+html.light .ops-input::placeholder { color: #94a3b8; }
+
+/* Scrollbar */
+html.light ::-webkit-scrollbar-track { background: var(--bunker-900); }
+html.light ::-webkit-scrollbar-thumb { background: var(--bunker-600); }
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+
 * { box-sizing: border-box; }
 
 body {
@@ -15,6 +50,8 @@ body {
 ::-webkit-scrollbar-track { @apply bg-bunker-900; }
 ::-webkit-scrollbar-thumb { @apply bg-bunker-600 rounded; }
 ::-webkit-scrollbar-thumb:hover { @apply bg-ops-green; }
+
+/* ─── Component classes ──────────────────────────────────────────────────── */
 
 .ops-card {
   @apply bg-bunker-900 border border-bunker-600 rounded-lg p-4;

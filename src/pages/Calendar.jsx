@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays } from 'lucide-react'
 import {
@@ -517,6 +518,7 @@ export default function Calendar() {
   const [current, setCurrent]   = useState(new Date())
   const [modal, setModal]       = useState(null)
   const [selected, setSelected] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Subjects live from SITREP cards
   const subjects = useMemo(() => {
@@ -526,6 +528,17 @@ export default function Calendar() {
     if (!cards.find(c => c.id === 'personal')) cards.push(PERSONAL)
     return cards
   }, [state.sitrep?.cards])
+
+  // Deep-link: /calendar?new=1&subject=cardId → auto-open new event modal
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      const ev = blankEvent()
+      const subjectParam = searchParams.get('subject')
+      if (subjectParam) ev.subject = subjectParam
+      setModal(ev)
+      setSearchParams({}, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNav = (dir) => {
     if (dir === 0) { setCurrent(new Date()); setSelected(new Date()) }
