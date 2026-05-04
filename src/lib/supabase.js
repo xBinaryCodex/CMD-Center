@@ -35,3 +35,35 @@ export async function deleteUserData(userId) {
     .eq('user_id', userId)
   if (error) throw error
 }
+
+/**
+ * Attempt to redeem a license key.
+ * Returns { success: true, plan: 'pro' } or { success: false, error: string }
+ * Requires RLS policy: authenticated users can UPDATE rows where used_by IS NULL.
+ */
+export async function redeemLicense(rawKey, userId) {
+  const key = rawKey.trim().toLowerCase()
+
+  // Atomically claim the key (only works if used_by IS NULL → prevents double-use)
+  const { data, error } = await supabase
+    .from('licenses')
+    .update({ used_by: userId, used_at: new Date().toISOString() })
+    .eq('key', key)
+    .is('used_by', null)
+    .select('plan')
+    .single()
+
+  if (error || !data) {
+    // Distinguish "already used" vs "doesn't exist"
+    const { data: check } = await supabase
+      .from('licenses')
+      .select('used_by')
+      .eq('key', key)
+      .maybeSingle()
+    if (!check) return { success: false, error: 'Invalid key — double-check and try again.' }
+    if (check.used_by) return { success: false, error: 'This key has already been used.' }
+    return { success: false, error: 'Activation failed — please try again.' }
+  }
+
+  return { success: true, plan: data.plan || 'pro' }
+}

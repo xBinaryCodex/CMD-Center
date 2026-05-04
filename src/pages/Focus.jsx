@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store/useStore'
-import { Timer, Play, Pause, RotateCcw, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap } from 'lucide-react'
+import { Timer, Play, Pause, RotateCcw, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, Lock } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import { isPlanPro } from '../lib/plans'
 
 const PRESETS = [
   { label: '25m', seconds: 25 * 60, type: 'work' },
@@ -280,20 +281,30 @@ export default function Focus() {
         ))}
       </div>
 
-      {/* Session log */}
+      {/* Session log — Pro only */}
       <div className="ops-card">
-        <button
-          onClick={() => setShowLogs(l => !l)}
-          className="flex items-center justify-between w-full"
-        >
-          <div className="section-title mb-0"><Zap className="w-3.5 h-3.5 text-ops-red" /> Session Log ({sessions.length})</div>
-          {showLogs ? <ChevronUp className="w-3.5 h-3.5 text-gray-600" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-600" />}
-        </button>
-
-        {showLogs && (
-          <div className="mt-3 space-y-1.5 max-h-72 overflow-y-auto">
-            {sessions.length === 0 && <p className="text-xs text-gray-600 text-center py-4">No sessions logged yet.</p>}
-            {sessions.map(s => <SessionRow key={s.id} s={s} />)}
+        {isPlanPro(state.profile.plan) ? (
+          <>
+            <button
+              onClick={() => setShowLogs(l => !l)}
+              className="flex items-center justify-between w-full"
+            >
+              <div className="section-title mb-0"><Zap className="w-3.5 h-3.5 text-ops-red" /> Session Log ({sessions.length})</div>
+              {showLogs ? <ChevronUp className="w-3.5 h-3.5 text-gray-600" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-600" />}
+            </button>
+            {showLogs && (
+              <div className="mt-3 space-y-1.5 max-h-72 overflow-y-auto">
+                {sessions.length === 0 && <p className="text-xs text-gray-600 text-center py-4">No sessions logged yet.</p>}
+                {sessions.map(s => <SessionRow key={s.id} s={s} />)}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="section-title mb-0"><Zap className="w-3.5 h-3.5 text-ops-red" /> Session Log</div>
+            <span className="text-[10px] text-ops-amber/70 flex items-center gap-1 border border-ops-amber/30 rounded px-2 py-0.5">
+              <Lock className="w-2.5 h-2.5" /> Pro feature
+            </span>
           </div>
         )}
       </div>

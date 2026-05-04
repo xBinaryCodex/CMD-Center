@@ -185,7 +185,7 @@ export function buildJoseCards() {
 }
 
 const defaultState = {
-  profile: { name: '', xp: 0, totalXpEarned: 0 },
+  profile: { name: '', xp: 0, totalXpEarned: 0, plan: 'free' },
   sitrep: { cards: buildDefaultCards() },
   tasks: [],
   calendarEvents: [],

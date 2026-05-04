@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore'
-import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock } from 'lucide-react'
+import { isPlanPro, FREE_EVENT_LIMIT } from '../lib/plans'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO
@@ -418,7 +419,7 @@ function UpcomingPanel({ events, subjects, onEdit }) {
 
 // ─── Selected day detail ──────────────────────────────────────────────────────
 
-function DayDetail({ day, events, subjects, onEdit, onDelete, onAdd }) {
+function DayDetail({ day, events, subjects, onEdit, onDelete, onAdd, canAdd }) {
   const dayEvents = events
     .filter(ev => eventCoversDay(ev, day))
     .sort((a, b) => {
@@ -431,9 +432,11 @@ function DayDetail({ day, events, subjects, onEdit, onDelete, onAdd }) {
     <div className="ops-card">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-bold text-gray-100">{format(day, 'EEEE, MMMM d')}</h3>
-        <button onClick={onAdd} className="ops-btn-primary flex items-center gap-1">
-          <Plus className="w-3 h-3" /> Add
-        </button>
+        {canAdd && (
+          <button onClick={onAdd} className="ops-btn-primary flex items-center gap-1">
+            <Plus className="w-3 h-3" /> Add
+          </button>
+        )}
       </div>
 
       {dayEvents.length === 0 ? (
@@ -514,6 +517,8 @@ export default function Calendar() {
   const { state, update, addXp, ts } = useStore()
   const rawEvents = state.calendarEvents || []
   const events    = useMemo(() => rawEvents.map(normalizeEvent), [rawEvents])
+  const isPro     = isPlanPro(state.profile.plan)
+  const atEventLimit = !isPro && rawEvents.length >= FREE_EVENT_LIMIT
 
   const [current, setCurrent]   = useState(new Date())
   const [modal, setModal]       = useState(null)
@@ -572,9 +577,15 @@ export default function Calendar() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-ops-blue tracking-widest">// CALENDAR</h1>
-        <button onClick={() => setModal(blankEvent())} className="ops-btn-primary flex items-center gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> New Event
-        </button>
+        {atEventLimit ? (
+          <div className="flex items-center gap-1.5 text-[11px] text-ops-amber/70 border border-ops-amber/30 rounded px-3 py-1.5 bg-ops-amber/5">
+            <Lock className="w-3 h-3" /> {FREE_EVENT_LIMIT}/{FREE_EVENT_LIMIT} events — Upgrade for more
+          </div>
+        ) : (
+          <button onClick={() => setModal(blankEvent())} className="ops-btn-primary flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> New Event
+          </button>
+        )}
       </div>
 
       {/* Domain legend */}
@@ -602,6 +613,7 @@ export default function Calendar() {
           onEdit={ev => setModal({ ...ev })}
           onDelete={deleteEvent}
           onAdd={() => setModal(blankEvent(format(selected, 'yyyy-MM-dd')))}
+          canAdd={!atEventLimit}
         />
       )}
 

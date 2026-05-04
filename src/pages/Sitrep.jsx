@@ -5,9 +5,10 @@ import {
   Network, BookOpen, Shield, Gamepad2, Brain, Briefcase, Code,
   Database, Globe, Server, Zap, Target, Star, Cpu, Plus,
   ChevronDown, ChevronUp, Check, X, Edit3, Trash2,
-  Clock, AlertTriangle, CalendarDays,
+  Clock, AlertTriangle, CalendarDays, Lock,
 } from 'lucide-react'
 import { format, parseISO, isAfter, startOfDay } from 'date-fns'
+import { FREE_COLORS, FREE_DOMAIN_LIMIT, isPlanPro } from '../lib/plans'
 
 // ─── Dynamic hex color helpers ────────────────────────────────────────────────
 
@@ -527,9 +528,55 @@ function StatusPicker({ status, onChange }) {
   )
 }
 
+// ─── Card color picker (free: 8 swatches; pro: swatches + custom) ─────────────
+
+function CardColorPicker({ value, onChange, isPro, size = 'sm' }) {
+  const [open, setOpen] = useState(false)
+  const dot = size === 'sm' ? 'w-4 h-4' : 'w-6 h-6'
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} title="Change color"
+        className={`${dot} rounded-full border border-bunker-600 cursor-pointer hover:scale-110 transition-transform`}
+        style={{ backgroundColor: value }} />
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-6 right-0 z-20 bg-bunker-800 border border-bunker-600 rounded-lg p-2.5 shadow-xl min-w-[120px]">
+            <div className="grid grid-cols-4 gap-1.5">
+              {FREE_COLORS.map(hex => (
+                <button key={hex} onClick={() => { onChange(hex); setOpen(false) }}
+                  title={hex}
+                  className="w-5 h-5 rounded-full border-2 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: hex, borderColor: value === hex ? 'white' : 'transparent' }} />
+              ))}
+            </div>
+            {isPro ? (
+              <div className="mt-2 flex items-center gap-1.5 border-t border-bunker-700 pt-2">
+                <div className="relative w-5 h-5 flex-shrink-0">
+                  <div className="w-5 h-5 rounded-full border-2 cursor-pointer"
+                    style={{ background: 'conic-gradient(red,yellow,green,blue,purple,red)', borderColor: !FREE_COLORS.includes(value) ? 'white' : 'transparent' }} />
+                  <input type="color" value={value}
+                    onChange={e => { onChange(e.target.value); setOpen(false) }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-5 h-5" />
+                </div>
+                <span className="text-[9px] text-gray-500">Custom</span>
+              </div>
+            ) : (
+              <p className="text-[9px] text-ops-amber/70 mt-2 border-t border-bunker-700 pt-2 flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" /> Pro: custom colors
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Add New Card Modal ───────────────────────────────────────────────────────
 
-function AddCardModal({ onSave, onClose }) {
+function AddCardModal({ onSave, onClose, isPro }) {
   const [title, setTitle]         = useState('')
   const [icon, setIcon]           = useState('Star')
   const [color, setColor]         = useState('#00ff88')
@@ -598,22 +645,31 @@ function AddCardModal({ onSave, onClose }) {
 
         <div>
           <label className="ops-label">Accent Color</label>
-          <div className="flex items-center gap-3">
-            <input type="color" value={color} onChange={e => setColor(e.target.value)}
-              className="w-10 h-10 rounded cursor-pointer border border-bunker-600 bg-transparent" />
-            <div className="flex-1 h-8 rounded border border-bunker-600 transition-all"
-              style={{ backgroundColor: a.bg12, borderColor: a.bd30 }} />
-            <span className="text-xs text-gray-500 font-mono w-16">{color}</span>
-          </div>
-          {/* Quick presets */}
-          <div className="flex gap-2 mt-2 flex-wrap">
-            {['#00ff88','#38bdf8','#a78bfa','#f59e0b','#22d3ee','#a3e635','#ef4444','#f97316','#ec4899','#6366f1','#14b8a6','#eab308'].map(h => (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Free: 8 preset swatches */}
+            {FREE_COLORS.map(h => (
               <button key={h} onClick={() => setColor(h)}
-                className={`w-6 h-6 rounded-full border-2 transition-all`}
+                className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
                 style={{ backgroundColor: h, borderColor: color === h ? 'white' : 'transparent',
-                  transform: color === h ? 'scale(1.2)' : 'scale(1)' }} />
+                  transform: color === h ? 'scale(1.2)' : undefined }} />
             ))}
+            {/* Pro: additional custom picker */}
+            {isPro ? (
+              <div className="relative w-6 h-6" title="Custom color">
+                <div className="w-6 h-6 rounded-full border-2 cursor-pointer"
+                  style={{ background: 'conic-gradient(red,yellow,green,blue,purple,red)',
+                    borderColor: !FREE_COLORS.includes(color) ? 'white' : 'transparent' }} />
+                <input type="color" value={color} onChange={e => setColor(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-6 h-6" />
+              </div>
+            ) : (
+              <span className="text-[9px] text-ops-amber/60 flex items-center gap-1 ml-1">
+                <Lock className="w-2.5 h-2.5" /> Pro: custom
+              </span>
+            )}
           </div>
+          <div className="mt-2 h-6 rounded border border-bunker-600 transition-all"
+            style={{ backgroundColor: a.bg12, borderColor: a.bd30 }} />
         </div>
 
         {/* Preview */}
@@ -639,7 +695,7 @@ function AddCardModal({ onSave, onClose }) {
 
 // ─── Individual SITREP Card ───────────────────────────────────────────────────
 
-function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
+function SitrepCard({ card, onUpdate, onDelete, addXp, ts, isPro }) {
   const [collapsed, setCollapsed]   = useState(card.collapsed || false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft]     = useState('')
@@ -698,14 +754,8 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
           </span>
         )}
 
-        {/* Accent color picker — right on the card header */}
-        <div className="relative group/cp" title="Change color">
-          <div className="w-4 h-4 rounded-full border border-bunker-600 cursor-pointer hover:scale-110 transition-transform"
-            style={{ backgroundColor: card.accentColor }} />
-          <input type="color" value={card.accentColor}
-            onChange={e => set({ accentColor: e.target.value })}
-            className="absolute inset-0 opacity-0 cursor-pointer w-4 h-4" />
-        </div>
+        {/* Accent color picker — Pro: custom; Free: 8 presets via popover */}
+        <CardColorPicker value={card.accentColor} onChange={hex => set({ accentColor: hex })} isPro={isPro} />
 
         <button onClick={() => { const c = !collapsed; setCollapsed(c); set({ collapsed: c }) }}
           className="text-gray-600 hover:text-gray-300 transition-colors">
@@ -813,6 +863,8 @@ export default function Sitrep() {
   const cards = state.sitrep?.cards || []
   const [showAddModal, setShowAddModal] = useState(false)
   const now = new Date()
+  const isPro = isPlanPro(state.profile.plan)
+  const atDomainLimit = !isPro && cards.length >= FREE_DOMAIN_LIMIT
 
   const updateCard = (updated) =>
     update(s => { s.sitrep.cards = s.sitrep.cards.map(c => c.id === updated.id ? updated : c) })
@@ -864,7 +916,7 @@ export default function Sitrep() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      {showAddModal && <AddCardModal onSave={addCard} onClose={() => setShowAddModal(false)} />}
+      {showAddModal && <AddCardModal onSave={addCard} onClose={() => setShowAddModal(false)} isPro={isPro} />}
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -872,9 +924,16 @@ export default function Sitrep() {
           <h1 className="text-lg font-bold text-ops-green tracking-widest">// SITREP</h1>
           <p className="text-xs text-gray-600 mt-0.5">{format(now, 'EEEE, MMMM d yyyy')} · {format(now, 'HH:mm')}</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="ops-btn-primary flex items-center gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Add Domain
-        </button>
+        {atDomainLimit ? (
+          <div className="flex items-center gap-1.5 text-[11px] text-ops-amber/70 border border-ops-amber/30 rounded px-3 py-1.5 bg-ops-amber/5">
+            <Lock className="w-3 h-3" />
+            <span>{FREE_DOMAIN_LIMIT}/{FREE_DOMAIN_LIMIT} domains — <span className="underline cursor-pointer">Upgrade for more</span></span>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddModal(true)} className="ops-btn-primary flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Add Domain
+          </button>
+        )}
       </div>
 
       {/* Critical strip */}
@@ -897,7 +956,7 @@ export default function Sitrep() {
       {/* Cards grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {cards.map(card => (
-          <SitrepCard key={card.id} card={card} onUpdate={updateCard} onDelete={deleteCard} addXp={addXp} ts={ts} />
+          <SitrepCard key={card.id} card={card} onUpdate={updateCard} onDelete={deleteCard} addXp={addXp} ts={ts} isPro={isPro} />
         ))}
       </div>
 

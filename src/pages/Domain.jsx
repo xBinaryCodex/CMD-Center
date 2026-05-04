@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
+import { FREE_COLORS, isPlanPro } from '../lib/plans'
 import {
   Network, BookOpen, Shield, Gamepad2, Brain, Briefcase, Code,
   Database, Globe, Server, Zap, Target, Star, Cpu,
   ChevronLeft, Plus, Check, X, Trash2, Edit3,
   Clock, AlertTriangle, Link2, CalendarDays, Timer,
-  ChevronDown, ChevronUp, ExternalLink, Flag,
+  ChevronDown, ChevronUp, ExternalLink, Flag, Lock,
 } from 'lucide-react'
 import { format, parseISO, startOfDay, isAfter } from 'date-fns'
 
@@ -560,6 +561,50 @@ function FocusPanel({ card, hex }) {
   )
 }
 
+// ─── Color picker (free: 8 swatches; pro: swatches + custom) ─────────────────
+
+function DomainColorPicker({ value, onChange, isPro }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative flex-shrink-0" title="Change accent color">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-5 h-5 rounded-full border-2 border-bunker-600 cursor-pointer hover:scale-110 transition-transform"
+        style={{ backgroundColor: value }} />
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-7 right-0 z-20 bg-bunker-800 border border-bunker-600 rounded-lg p-2.5 shadow-xl">
+            <div className="grid grid-cols-4 gap-1.5">
+              {FREE_COLORS.map(hex => (
+                <button key={hex} onClick={() => { onChange(hex); setOpen(false) }}
+                  className="w-5 h-5 rounded-full border-2 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: hex, borderColor: value === hex ? 'white' : 'transparent' }} />
+              ))}
+            </div>
+            {isPro ? (
+              <div className="mt-2 flex items-center gap-1.5 border-t border-bunker-700 pt-2">
+                <div className="relative w-5 h-5 flex-shrink-0">
+                  <div className="w-5 h-5 rounded-full border-2 cursor-pointer"
+                    style={{ background: 'conic-gradient(red,yellow,green,blue,purple,red)',
+                      borderColor: !FREE_COLORS.includes(value) ? 'white' : 'transparent' }} />
+                  <input type="color" value={value}
+                    onChange={e => { onChange(e.target.value); setOpen(false) }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-5 h-5" />
+                </div>
+                <span className="text-[9px] text-gray-500">Custom</span>
+              </div>
+            ) : (
+              <p className="text-[9px] text-ops-amber/70 mt-2 border-t border-bunker-700 pt-2 flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" /> Pro: custom colors
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Status picker (click-toggle, not CSS hover — avoids overflow clipping) ───
 
 function DomainStatusPicker({ status, onChange }) {
@@ -622,6 +667,7 @@ export default function Domain() {
 
   const a = ac(card.accentColor)
   const Icon = ICON_MAP[card.icon] || Star
+  const isPro = isPlanPro(state.profile.plan)
 
   // Helpers to update the card
   const setCard = (fields) =>
@@ -728,14 +774,8 @@ export default function Domain() {
                 {/* Status — click-toggle (not hover, avoids clipping issues) */}
                 <DomainStatusPicker status={card.status} onChange={s => setCard({ status: s })} />
 
-                {/* Color picker */}
-                <div className="relative" title="Change accent color">
-                  <div className="w-5 h-5 rounded-full cursor-pointer hover:scale-110 transition-transform border-2 border-bunker-600"
-                    style={{ backgroundColor: card.accentColor }} />
-                  <input type="color" value={card.accentColor}
-                    onChange={e => setCard({ accentColor: e.target.value })}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-5 h-5" />
-                </div>
+                {/* Color picker — free: 8 swatches; pro: swatches + custom */}
+                <DomainColorPicker value={card.accentColor} onChange={v => setCard({ accentColor: v })} isPro={isPro} />
               </div>
 
               {/* Tagline */}

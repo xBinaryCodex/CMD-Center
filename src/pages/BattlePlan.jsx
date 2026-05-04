@@ -6,6 +6,8 @@ import {
   ChevronLeft, ChevronRight, CalendarDays
 } from 'lucide-react'
 import { format, startOfWeek, addDays, subWeeks, addWeeks, isSameWeek } from 'date-fns'
+import { isPlanPro } from '../lib/plans'
+import UpgradePrompt from '../components/UpgradePrompt'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -775,6 +777,11 @@ function DayColumn({ day, date, isToday, blocks, selected, onSelect, onAdd }) {
 
 export default function BattlePlan() {
   const { state, update, addXp, ts } = useStore()
+
+  if (!isPlanPro(state.profile.plan)) {
+    return <UpgradePrompt feature="Battle Plan" />
+  }
+
   const bp        = state.battlePlan || {}
   const templates = bp.templates || []
 

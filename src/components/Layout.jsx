@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useStore, clearSession } from '../store/useStore'
 import { useAuth } from '../context/AuthContext'
-import { supabase, deleteUserData } from '../lib/supabase'
+import { supabase, deleteUserData, redeemLicense } from '../lib/supabase'
+import { isPlanPro } from '../lib/plans'
 import {
   LayoutDashboard, CalendarDays, ListChecks,
   BookOpen, Network, Gamepad2, Briefcase, FlaskConical, Timer,
@@ -151,6 +152,10 @@ export default function Layout({ children }) {
   const [editingName, setEditingName]       = useState(false)
   const [nameDraft, setNameDraft]           = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showUpgrade, setShowUpgrade]       = useState(false)
+  const [licenseKey, setLicenseKey]         = useState('')
+  const [licenseError, setLicenseError]     = useState('')
+  const [licenseLoading, setLicenseLoading] = useState(false)
 
   const { state, update, level, xpProgress, nextLevelXp, currentLevelXp } = useStore()
   const { user, signOut } = useAuth()
@@ -173,6 +178,7 @@ export default function Layout({ children }) {
   // Display name: store profile takes priority (updated by name editor + by initSession),
   // then auth metadata fallback, then generic placeholder
   const displayName = state.profile.name || user?.user_metadata?.first_name || 'USER'
+  const isPro = isPlanPro(state.profile.plan)
 
   // Dynamic domain cards from SITREP
   const domainCards = state.sitrep?.cards || []
@@ -187,6 +193,22 @@ export default function Layout({ children }) {
     try { await supabase.auth.updateUser({ data: { first_name: trimmed } }) }
     catch (e) { console.warn('[Profile] metadata update failed:', e.message) }
     setEditingName(false)
+  }
+
+  // ── License key activation ────────────────────────────────────────────────
+  const activateLicense = async () => {
+    if (!licenseKey.trim()) return
+    setLicenseLoading(true)
+    setLicenseError('')
+    const result = await redeemLicense(licenseKey.trim(), user.id)
+    setLicenseLoading(false)
+    if (result.success) {
+      update(s => { s.profile.plan = result.plan })
+      setShowUpgrade(false)
+      setLicenseKey('')
+    } else {
+      setLicenseError(result.error)
+    }
   }
 
   // ── Delete account ─────────────────────────────────────────────────────────
@@ -285,6 +307,54 @@ export default function Layout({ children }) {
             <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} collapsed={collapsed} />
           ))}
         </nav>
+
+        {/* Pro / Upgrade section */}
+        {isPro ? (
+          !collapsed && (
+            <div className="px-3 py-1.5 border-t border-bunker-700">
+              <span className="text-[9px] text-ops-amber font-semibold tracking-widest uppercase">⚡ Pro</span>
+            </div>
+          )
+        ) : (
+          <div className="border-t border-bunker-700">
+            {!collapsed && (
+              showUpgrade ? (
+                <div className="px-3 py-2 space-y-1.5">
+                  <input
+                    autoFocus
+                    className="ops-input text-xs py-1 font-mono tracking-widest text-center"
+                    placeholder="License key…"
+                    value={licenseKey}
+                    onChange={e => setLicenseKey(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') activateLicense(); if (e.key === 'Escape') { setShowUpgrade(false); setLicenseError('') } }}
+                  />
+                  {licenseError && <p className="text-[9px] text-ops-red">{licenseError}</p>}
+                  <div className="flex gap-1">
+                    <button onClick={activateLicense} disabled={licenseLoading || !licenseKey.trim()}
+                      className="flex-1 ops-btn text-[10px] py-1 border rounded border-ops-amber/50 text-ops-amber bg-ops-amber/10 hover:bg-ops-amber/20 disabled:opacity-40">
+                      {licenseLoading ? '…' : 'Activate'}
+                    </button>
+                    <button onClick={() => { setShowUpgrade(false); setLicenseError('') }}
+                      className="ops-btn-ghost text-[10px] py-1 px-2">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowUpgrade(true)}
+                  className="w-full px-3 py-2 text-[10px] text-ops-amber/70 hover:text-ops-amber hover:bg-ops-amber/5 transition-colors flex items-center gap-1.5">
+                  <Zap className="w-3 h-3" /> Upgrade to Pro
+                </button>
+              )
+            )}
+            {collapsed && (
+              <button onClick={() => setShowUpgrade(true)} title="Upgrade to Pro"
+                className="w-full py-2 flex items-center justify-center text-ops-amber/60 hover:text-ops-amber hover:bg-ops-amber/5 transition-colors">
+                <Zap className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* XP Bar */}
         <XPBar
