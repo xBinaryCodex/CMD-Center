@@ -542,6 +542,38 @@ function FocusPanel({ card, hex }) {
   )
 }
 
+// ─── Status picker (click-toggle, not CSS hover — avoids overflow clipping) ───
+
+function DomainStatusPicker({ status, onChange }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`text-[10px] px-2.5 py-1 rounded-full border select-none transition-colors
+          ${STATUS_COLORS[status] || STATUS_COLORS['Active']}`}
+      >
+        {status}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-8 z-20 bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[140px] shadow-xl">
+            {STATUS_OPTS.map(s => (
+              <button key={s}
+                onClick={() => { onChange(s); setOpen(false) }}
+                className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-bunker-700 transition-colors
+                  ${status === s ? 'text-ops-green' : 'text-gray-300'}`}>
+                {status === s ? '✓ ' : '  '}{s}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Domain page ─────────────────────────────────────────────────────────
 
 export default function Domain() {
@@ -648,8 +680,9 @@ export default function Domain() {
     <div className="max-w-6xl mx-auto space-y-4">
 
       {/* ── Back + Header ── */}
-      <div className="rounded-xl border border-bunker-700 overflow-hidden" style={a.headerBg}>
-        <div className="p-5">
+      {/* Note: no overflow-hidden here so the status dropdown isn't clipped */}
+      <div className="rounded-xl border border-bunker-700" style={a.headerBg}>
+        <div className="p-5 rounded-t-xl">
           {/* Back link */}
           <button onClick={() => navigate('/')}
             className="flex items-center gap-1 text-[11px] text-gray-600 hover:text-gray-300 transition-colors mb-4">
@@ -666,23 +699,16 @@ export default function Domain() {
             {/* Title + tagline */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-100">{card.title}</h1>
+                {/* Editable title */}
+                <InlineEdit
+                  value={card.title}
+                  onSave={v => setCard({ title: v.trim() || card.title })}
+                  placeholder="Domain title…"
+                  className="text-xl font-bold text-gray-100"
+                />
 
-                {/* Status */}
-                <div className="relative group">
-                  <span className={`text-[10px] px-2.5 py-1 rounded-full border cursor-pointer select-none
-                    ${STATUS_COLORS[card.status] || STATUS_COLORS['Active']}`}>
-                    {card.status}
-                  </span>
-                  <div className="absolute left-0 top-7 z-20 hidden group-hover:block bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[130px] shadow-xl">
-                    {STATUS_OPTS.map(s => (
-                      <button key={s} onClick={() => setCard({ status: s })}
-                        className="block w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-bunker-700">
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Status — click-toggle (not hover, avoids clipping issues) */}
+                <DomainStatusPicker status={card.status} onChange={s => setCard({ status: s })} />
 
                 {/* Color picker */}
                 <div className="relative" title="Change accent color">
@@ -707,8 +733,8 @@ export default function Domain() {
           </div>
         </div>
 
-        {/* Stats bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-bunker-700 divide-x divide-bunker-700">
+        {/* Stats bar — overflow-hidden + rounded-b-xl clips to card bottom corners */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-bunker-700 divide-x divide-bunker-700 overflow-hidden rounded-b-xl">
           {[
             { icon: Target,      label: 'Active Objectives', value: allActiveObj.length },
             { icon: CalendarDays,label: 'Upcoming Events',   value: upcomingEvents.length },

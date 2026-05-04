@@ -476,6 +476,39 @@ function InlineField({ label, value, onSave, type = 'text', min, max }) {
   )
 }
 
+// ─── Status picker (click-toggle, not hover — avoids overflow-hidden clipping) ─
+
+function StatusPicker({ status, onChange }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`text-[10px] px-2 py-0.5 rounded-full border select-none transition-colors
+          ${STATUS_COLORS[status] || STATUS_COLORS['Active']}`}
+      >
+        {status}
+      </button>
+      {open && (
+        <>
+          {/* Backdrop to close */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-7 z-20 bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[130px] shadow-xl">
+            {STATUS_OPTS.map(s => (
+              <button key={s}
+                onClick={() => { onChange(s); setOpen(false) }}
+                className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-bunker-700 transition-colors
+                  ${status === s ? 'text-ops-green' : 'text-gray-300'}`}>
+                {status === s ? '✓ ' : '  '}{s}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Add New Card Modal ───────────────────────────────────────────────────────
 
 function AddCardModal({ onSave, onClose }) {
@@ -589,7 +622,9 @@ function AddCardModal({ onSave, onClose }) {
 // ─── Individual SITREP Card ───────────────────────────────────────────────────
 
 function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
-  const [collapsed, setCollapsed] = useState(card.collapsed || false)
+  const [collapsed, setCollapsed]   = useState(card.collapsed || false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft]     = useState('')
   const a = ac(card.accentColor)
   const Icon = ICON_MAP[card.icon] || Star
 
@@ -601,28 +636,43 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts }) {
     .filter(o => !o.done).length
 
   return (
-    <div className="bg-bunker-900 border border-bunker-700 rounded-lg overflow-hidden" style={a.cardBorder}>
+    <div className="bg-bunker-900 border border-bunker-700 rounded-lg" style={a.cardBorder}>
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-bunker-800">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-bunker-800 rounded-t-lg bg-bunker-900">
         <Icon className="w-4 h-4 flex-shrink-0" style={a.text} />
-        <span className="text-sm font-bold text-gray-100 flex-1 truncate">{card.title}</span>
 
-        {/* Status — hover to change */}
-        <div className="relative group">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border cursor-pointer select-none
-            ${STATUS_COLORS[card.status] || STATUS_COLORS['Active']}`}>
-            {card.status}
-          </span>
-          <div className="absolute right-0 top-6 z-20 hidden group-hover:block bg-bunker-800 border border-bunker-600 rounded-lg py-1 min-w-[120px] shadow-xl">
-            {STATUS_OPTS.map(s => (
-              <button key={s} onClick={() => set({ status: s })}
-                className="block w-full text-left px-3 py-1 text-xs text-gray-300 hover:bg-bunker-700">
-                {s}
-              </button>
-            ))}
+        {/* Editable title */}
+        {editingTitle ? (
+          <div className="flex gap-1 flex-1 min-w-0">
+            <input
+              className="ops-input flex-1 text-sm py-0.5"
+              value={titleDraft}
+              autoFocus
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { set({ title: titleDraft }); setEditingTitle(false) }
+                if (e.key === 'Escape') setEditingTitle(false)
+              }}
+            />
+            <button onClick={() => { set({ title: titleDraft }); setEditingTitle(false) }}
+              className="ops-btn-primary py-0.5 px-2 flex-shrink-0"><Check className="w-3 h-3" /></button>
+            <button onClick={() => setEditingTitle(false)}
+              className="ops-btn-ghost py-0.5 px-2 flex-shrink-0"><X className="w-3 h-3" /></button>
           </div>
-        </div>
+        ) : (
+          <button
+            className="flex-1 text-left text-sm font-bold text-gray-100 truncate group/title flex items-center gap-1.5 min-w-0"
+            onClick={() => { setTitleDraft(card.title); setEditingTitle(true) }}
+            title="Click to rename"
+          >
+            <span className="truncate">{card.title}</span>
+            <Edit3 className="w-3 h-3 text-gray-700 group-hover/title:text-ops-green transition-colors flex-shrink-0" />
+          </button>
+        )}
+
+        {/* Status — click to change */}
+        <StatusPicker status={card.status} onChange={s => set({ status: s })} />
 
         {activeCount > 0 && (
           <span className="text-[10px] px-1.5 py-0.5 rounded border ml-1" style={a.pill}>
