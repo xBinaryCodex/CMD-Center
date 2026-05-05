@@ -46,6 +46,16 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Prevent iOS tap highlight flash */
   -webkit-tap-highlight-color: transparent;
+  /* Prevent horizontal overflow from triggering landscape zoom */
+  overflow-x: hidden;
+  /* Lock the body itself — layout scrolling happens inside the flex container */
+  overflow-y: hidden;
+}
+
+/* Prevent landscape orientation from rescaling text */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* iPhone notch / home bar safe area for bottom nav */
@@ -58,6 +68,17 @@ body {
 @media screen and (max-width: 1024px) {
   input, select, textarea {
     font-size: 16px !important;
+  }
+}
+
+/* Landscape: shrink the bottom nav labels so it doesn't eat screen height */
+@media screen and (max-width: 1024px) and (orientation: landscape) {
+  .mobile-bottom-nav {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+  .mobile-bottom-nav span {
+    display: none;
   }
 }
 

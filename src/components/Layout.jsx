@@ -323,7 +323,7 @@ export default function Layout({ children }) {
   )
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bunker-950">
+    <div className="flex bg-bunker-950" style={{ position: 'fixed', inset: 0 }}>
       {/* Modals */}
       {showDeleteModal && <DeleteModal onConfirm={handleDeleteAccount} onCancel={() => setShowDeleteModal(false)} />}
 
@@ -528,7 +528,7 @@ export default function Layout({ children }) {
         </main>
 
         {/* ── Mobile bottom nav — in normal flow (NOT fixed) so iOS keyboard can't displace it ── */}
-        <nav className="lg:hidden flex-shrink-0 bg-bunker-900 border-t border-bunker-700 flex safe-area-inset-bottom">
+        <nav className="mobile-bottom-nav lg:hidden flex-shrink-0 bg-bunker-900 border-t border-bunker-700 flex safe-area-inset-bottom">
           {BOTTOM_NAV.map(item => {
             const active = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
             return (
