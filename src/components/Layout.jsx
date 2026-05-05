@@ -522,32 +522,32 @@ export default function Layout({ children }) {
           </div>
         </header>
 
-        {/* Page content — pb-16 on mobile for bottom nav clearance */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 pb-20 lg:pb-4">
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4">
           {children}
         </main>
-      </div>
 
-      {/* ── Mobile bottom nav bar ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-bunker-900 border-t border-bunker-700 flex safe-area-inset-bottom">
-        {BOTTOM_NAV.map(item => {
-          const active = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
-          return (
-            <NavLink key={item.to} to={item.to}
-              className={`flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors
-                ${active ? 'text-ops-green' : 'text-gray-600 hover:text-gray-300'}`}>
-              <item.icon className="w-5 h-5" />
-              <span className="text-[9px] font-medium">{item.label}</span>
-            </NavLink>
-          )
-        })}
-        {/* More → opens drawer */}
-        <button onClick={() => setMobileMenuOpen(true)}
-          className="flex-1 flex flex-col items-center py-2 gap-0.5 text-gray-600 hover:text-gray-300 transition-colors">
-          <Menu className="w-5 h-5" />
-          <span className="text-[9px] font-medium">More</span>
-        </button>
-      </nav>
+        {/* ── Mobile bottom nav — in normal flow (NOT fixed) so iOS keyboard can't displace it ── */}
+        <nav className="lg:hidden flex-shrink-0 bg-bunker-900 border-t border-bunker-700 flex safe-area-inset-bottom">
+          {BOTTOM_NAV.map(item => {
+            const active = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
+            return (
+              <NavLink key={item.to} to={item.to}
+                className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors
+                  ${active ? 'text-ops-green' : 'text-gray-600 hover:text-gray-300'}`}>
+                <item.icon className="w-5 h-5" />
+                <span className="text-[9px] font-medium">{item.label}</span>
+              </NavLink>
+            )
+          })}
+          {/* More → opens drawer */}
+          <button onClick={() => setMobileMenuOpen(true)}
+            className="flex-1 flex flex-col items-center py-2.5 gap-0.5 text-gray-600 hover:text-gray-300 transition-colors">
+            <Menu className="w-5 h-5" />
+            <span className="text-[9px] font-medium">More</span>
+          </button>
+        </nav>
+      </div>
     </div>
   )
 }

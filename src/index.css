@@ -53,6 +53,14 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Prevent iOS auto-zoom on input/select/textarea focus.
+   iOS zooms in whenever font-size < 16px — this keeps it locked. */
+@media screen and (max-width: 1024px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { @apply bg-bunker-900; }
 ::-webkit-scrollbar-thumb { @apply bg-bunker-600 rounded; }
