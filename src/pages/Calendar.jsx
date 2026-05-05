@@ -207,8 +207,11 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
 
       {/* Headers */}
       <div className="grid grid-cols-7 mb-1">
-        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-          <div key={d} className="text-center text-[10px] text-gray-600 uppercase tracking-wider py-1">{d}</div>
+        {[['Mon','M'],['Tue','T'],['Wed','W'],['Thu','T'],['Fri','F'],['Sat','S'],['Sun','S']].map(([full, short]) => (
+          <div key={full} className="text-center text-[10px] text-gray-600 uppercase tracking-wider py-1">
+            <span className="hidden sm:inline">{full}</span>
+            <span className="sm:hidden">{short}</span>
+          </div>
         ))}
       </div>
 
@@ -234,7 +237,7 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
               key={day.toISOString()}
               onClick={() => onSelectDay(isSel ? null : day)}
               className={[
-                'min-h-[80px] p-1 rounded cursor-pointer transition-all border',
+                'min-h-[52px] sm:min-h-[80px] p-0.5 sm:p-1 rounded cursor-pointer transition-all border',
                 !inMonth ? 'opacity-30' : '',
                 isToday && !isSel ? 'border-ops-green/40 bg-ops-green/5' : '',
                 isSel   ? 'border-ops-blue/50 bg-ops-blue/5' : '',
@@ -246,7 +249,16 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
                 {format(day, 'd')}
               </div>
 
-              <div className="space-y-0.5">
+              {/* Mobile: dots only. Desktop: pill labels */}
+              <div className="sm:hidden flex flex-wrap gap-0.5 mt-0.5">
+                {sorted.slice(0, 3).map(ev => {
+                  const subj = subjects.find(s => s.id === ev.subject) || PERSONAL
+                  const [r,g,b] = hexRgb(subj.accentColor)
+                  return <span key={ev.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `rgb(${r},${g},${b})` }} />
+                })}
+                {sorted.length > 3 && <span className="text-[8px] text-gray-600">+{sorted.length - 3}</span>}
+              </div>
+              <div className="hidden sm:block space-y-0.5">
                 {shown.map(ev => {
                   const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
                   const [r,g,b] = hexRgb(subj.accentColor)
@@ -628,8 +640,8 @@ export default function Calendar() {
         onNav={handleNav}
       />
 
-      {/* ── Two mini months side by side ── */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* ── Two mini months side by side (stack on mobile) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <MiniMonth monthDate={mini1} events={events} subjects={subjects} selected={selected} onSelectDay={setSelected} />
         <MiniMonth monthDate={mini2} events={events} subjects={subjects} selected={selected} onSelectDay={setSelected} />
       </div>

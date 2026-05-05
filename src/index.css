@@ -44,6 +44,13 @@ html.light ::-webkit-scrollbar-thumb { background: var(--bunker-600); }
 body {
   @apply bg-bunker-950 text-gray-100 font-mono;
   -webkit-font-smoothing: antialiased;
+  /* Prevent iOS tap highlight flash */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iPhone notch / home bar safe area for bottom nav */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
