@@ -16,7 +16,9 @@ export default {
           600: 'var(--bunker-600, #162840)',
         },
         ops: {
-          green:  '#00ff88',
+          // ops-green uses a CSS variable so dark/light mode can each pick the right shade.
+          // Opacity modifiers (/20, /50, etc.) work because we pass space-separated RGB channels.
+          green:  'rgb(var(--ops-green-rgb) / <alpha-value>)',
           lime:   '#a3e635',
           amber:  '#f59e0b',
           red:    '#ef4444',

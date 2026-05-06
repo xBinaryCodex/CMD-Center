@@ -12,6 +12,8 @@
   --bunker-800: #0a1520;
   --bunker-700: #0f1f2e;
   --bunker-600: #162840;
+  /* ops-green — neon on dark, deep emerald on light */
+  --ops-green-rgb: 0 255 136;
 }
 
 /* ─── Light theme — applied when <html class="light"> ────────────────────── */
@@ -22,6 +24,8 @@ html.light {
   --bunker-800: #ffffff;
   --bunker-700: #dde3ec;
   --bunker-600: #c8d0de;
+  /* deep emerald — readable on white backgrounds */
+  --ops-green-rgb: 5 150 105;
 }
 
 /* Flip primary content text (gray-100/200/300 are white-ish, must become dark) */
