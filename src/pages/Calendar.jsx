@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore'
-import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock, Repeat } from 'lucide-react'
 import { isPlanPro, FREE_EVENT_LIMIT } from '../lib/plans'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO
+  eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths,
+  addDays, parseISO, getDay, getDate, differenceInDays,
 } from 'date-fns'
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -26,30 +27,83 @@ const PRIORITIES = [
   { id: 'critical', label: 'Critical', color: '#ef4444' },
 ]
 
+const WEEK_DAYS   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+const ORDINALS    = ['1st','2nd','3rd','4th','5th']
+const DEFAULT_REC = { type: 'weekly', interval: 1, days: [], monthDay: 1, weekNum: 1, weekDay: 0, endType: 'never', endDate: '' }
+
 // ─── Event helpers ────────────────────────────────────────────────────────────
 
 function normalizeEvent(ev) {
   return {
     ...ev,
-    startDate: ev.startDate || ev.date || format(new Date(), 'yyyy-MM-dd'),
-    endDate:   ev.endDate   || ev.startDate || ev.date || format(new Date(), 'yyyy-MM-dd'),
-    startTime: ev.startTime || ev.time || '',
-    endTime:   ev.endTime   || '',
-    allDay:    ev.allDay    ?? false,
-    priority:  ev.priority  || 'normal',
-    notes:     ev.notes     || '',
-    subject:   ev.subject   || 'personal',
+    startDate:  ev.startDate  || ev.date || format(new Date(), 'yyyy-MM-dd'),
+    endDate:    ev.endDate    || ev.startDate || ev.date || format(new Date(), 'yyyy-MM-dd'),
+    startTime:  ev.startTime  || ev.time || '',
+    endTime:    ev.endTime    || '',
+    allDay:     ev.allDay     ?? false,
+    priority:   ev.priority   || 'normal',
+    notes:      ev.notes      || '',
+    subject:    ev.subject    || 'personal',
+    recurrence: ev.recurrence || null,
+    exceptions: ev.exceptions || [],
   }
 }
 
-function eventCoversDay(ev, day) {
-  const d = format(day, 'yyyy-MM-dd')
-  return d >= ev.startDate && d <= ev.endDate
+// js getDay: 0=Sun…6=Sat  →  our convention: 0=Mon…6=Sun
+function jsDayToOur(jsDay) { return jsDay === 0 ? 6 : jsDay - 1 }
+
+function eventOccursOnDay(ev, day) {
+  const dayStr = format(day, 'yyyy-MM-dd')
+
+  // Skip exceptions
+  if (ev.exceptions && ev.exceptions.includes(dayStr)) return false
+
+  // No recurrence — original span logic
+  if (!ev.recurrence || ev.recurrence.type === 'none') {
+    return dayStr >= ev.startDate && dayStr <= ev.endDate
+  }
+
+  // Must be on or after the event's start
+  if (dayStr < ev.startDate) return false
+
+  const rec = ev.recurrence
+
+  // Recurrence end
+  if (rec.endType === 'date' && rec.endDate && dayStr > rec.endDate) return false
+
+  switch (rec.type) {
+    case 'daily': {
+      const diff     = differenceInDays(day, parseISO(ev.startDate))
+      const interval = rec.interval || 1
+      return diff >= 0 && diff % interval === 0
+    }
+    case 'weekly': {
+      if (!rec.days || rec.days.length === 0) return false
+      const ourDay = jsDayToOur(getDay(day))
+      if (!rec.days.includes(ourDay)) return false
+      const interval = rec.interval || 1
+      if (interval > 1) {
+        const diffDays  = differenceInDays(day, parseISO(ev.startDate))
+        const diffWeeks = Math.floor(diffDays / 7)
+        return diffWeeks % interval === 0
+      }
+      return true
+    }
+    case 'monthly-date': {
+      return getDate(day) === (rec.monthDay || 1)
+    }
+    case 'monthly-weekday': {
+      const ourDay = jsDayToOur(getDay(day))
+      if (ourDay !== rec.weekDay) return false
+      const occurrence = Math.ceil(getDate(day) / 7)
+      return occurrence === rec.weekNum
+    }
+    default:
+      return false
+  }
 }
 
-function isMultiDay(ev) {
-  return ev.startDate !== ev.endDate
-}
+function isMultiDay(ev) { return ev.startDate !== ev.endDate }
 
 function blankEvent(date) {
   const d = date || format(new Date(), 'yyyy-MM-dd')
@@ -58,20 +112,89 @@ function blankEvent(date) {
     title: '', startDate: d, endDate: d,
     startTime: '', endTime: '',
     allDay: false, subject: 'personal', priority: 'normal', notes: '',
+    recurrence: null, exceptions: [],
+  }
+}
+
+// Expand recurring + regular events into a flat list of instances for a date window
+function getUpcomingInstances(events, fromDate, days = 90) {
+  const result  = []
+  const fromStr = format(fromDate, 'yyyy-MM-dd')
+  const toDate  = addDays(fromDate, days)
+  const toStr   = format(toDate, 'yyyy-MM-dd')
+
+  for (const ev of events) {
+    if (!ev.recurrence || ev.recurrence.type === 'none') {
+      if (ev.endDate >= fromStr && ev.startDate <= toStr) {
+        result.push({ ...ev, _date: ev.startDate })
+      }
+    } else {
+      // Walk days window to find occurrences
+      const startD = new Date(Math.max(parseISO(ev.startDate).getTime(), fromDate.getTime()))
+      let d = startD
+      while (d <= toDate) {
+        if (eventOccursOnDay(ev, d)) {
+          result.push({ ...ev, _date: format(d, 'yyyy-MM-dd') })
+        }
+        d = addDays(d, 1)
+      }
+    }
+  }
+
+  return result.sort((a, b) => {
+    const dc = (a._date || a.startDate).localeCompare(b._date || b.startDate)
+    return dc !== 0 ? dc : (a.startTime || '').localeCompare(b.startTime || '')
+  })
+}
+
+function recurrenceLabel(rec) {
+  if (!rec || rec.type === 'none') return null
+  switch (rec.type) {
+    case 'daily':
+      return rec.interval > 1 ? `Every ${rec.interval} days` : 'Daily'
+    case 'weekly': {
+      const dayNames = (rec.days || []).map(d => WEEK_DAYS[d]).join(', ')
+      const every    = rec.interval > 1 ? `Every ${rec.interval} weeks` : 'Weekly'
+      return dayNames ? `${every} on ${dayNames}` : every
+    }
+    case 'monthly-date':
+      return `Monthly on the ${rec.monthDay}${['st','nd','rd'][rec.monthDay-1] || 'th'}`
+    case 'monthly-weekday':
+      return `Monthly — ${ORDINALS[rec.weekNum-1]} ${WEEK_DAYS[rec.weekDay]}`
+    default:
+      return null
   }
 }
 
 // ─── EventModal ───────────────────────────────────────────────────────────────
 
 function EventModal({ event, subjects, onSave, onClose }) {
-  const [form, setForm] = useState(() => normalizeEvent(event))
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const [form, setForm]     = useState(() => normalizeEvent(event))
+  const [recOpen, setRecOpen] = useState(() => !!(event.recurrence && event.recurrence.type !== 'none'))
+
+  const set    = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const setRec = (k, v) => setForm(f => ({
+    ...f,
+    recurrence: { ...(f.recurrence || DEFAULT_REC), [k]: v }
+  }))
+
+  const toggleRepeat = (on) => {
+    setRecOpen(on)
+    setForm(f => ({ ...f, recurrence: on ? { ...DEFAULT_REC } : null }))
+  }
 
   const handleAllDay = (checked) =>
     setForm(f => ({ ...f, allDay: checked, startTime: checked ? '' : f.startTime, endTime: checked ? '' : f.endTime }))
 
   const handleStartDate = (v) =>
     setForm(f => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate }))
+
+  const toggleWeekDay = (d) => {
+    const days = form.recurrence?.days || []
+    setRec('days', days.includes(d) ? days.filter(x => x !== d) : [...days, d].sort())
+  }
+
+  const rec = form.recurrence || DEFAULT_REC
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -112,7 +235,7 @@ function EventModal({ event, subjects, onSave, onClose }) {
           </div>
         </div>
 
-        {/* Times — hidden when all day */}
+        {/* Times */}
         {!form.allDay && (
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -138,8 +261,7 @@ function EventModal({ event, subjects, onSave, onClose }) {
                   className="text-[10px] px-2 py-0.5 rounded-full border transition-all"
                   style={active
                     ? { color: `rgb(${r},${g},${b})`, backgroundColor: `rgba(${r},${g},${b},0.15)`, borderColor: `rgba(${r},${g},${b},0.6)` }
-                    : { borderColor: '#374151', color: '#6b7280' }}
-                >
+                    : { borderColor: '#374151', color: '#6b7280' }}>
                   {s.title}
                 </button>
               )
@@ -159,8 +281,7 @@ function EventModal({ event, subjects, onSave, onClose }) {
                   className="text-[10px] px-2.5 py-0.5 rounded border transition-all"
                   style={active
                     ? { color: `rgb(${pr},${pg},${pb})`, backgroundColor: `rgba(${pr},${pg},${pb},0.15)`, borderColor: `rgba(${pr},${pg},${pb},0.6)` }
-                    : { borderColor: '#374151', color: '#6b7280' }}
-                >
+                    : { borderColor: '#374151', color: '#6b7280' }}>
                   {p.label}
                 </button>
               )
@@ -172,6 +293,147 @@ function EventModal({ event, subjects, onSave, onClose }) {
         <div>
           <label className="ops-label">Notes</label>
           <textarea className="ops-textarea min-h-[60px]" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Details, links, context…" />
+        </div>
+
+        {/* ── Repeat ── */}
+        <div className="border-t border-bunker-700 pt-3 space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+            <div className="relative">
+              <input type="checkbox" className="sr-only peer" checked={recOpen} onChange={e => toggleRepeat(e.target.checked)} />
+              <div className="w-9 h-5 bg-bunker-700 rounded-full peer peer-checked:bg-ops-blue/60
+                after:content-[''] after:absolute after:top-0.5 after:left-[2px]
+                after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all
+                peer-checked:after:translate-x-full" />
+            </div>
+            <span className="text-xs text-gray-300 flex items-center gap-1.5">
+              <Repeat className="w-3.5 h-3.5 text-ops-blue" /> Repeat
+            </span>
+          </label>
+
+          {recOpen && (
+            <div className="bg-bunker-800 border border-bunker-600 rounded-lg p-3 space-y-3">
+
+              {/* Type */}
+              <div>
+                <label className="ops-label">Repeat type</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'daily',           label: 'Daily'          },
+                    { id: 'weekly',          label: 'Weekly'         },
+                    { id: 'monthly-date',    label: 'Monthly (date)' },
+                    { id: 'monthly-weekday', label: 'Monthly (day)'  },
+                  ].map(t => (
+                    <button key={t.id} onClick={() => setRec('type', t.id)}
+                      className={`text-[10px] px-2.5 py-1 rounded border transition-all
+                        ${rec.type === t.id
+                          ? 'bg-ops-blue/20 border-ops-blue/60 text-ops-blue'
+                          : 'border-bunker-600 text-gray-500 hover:border-gray-500'}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Daily — interval */}
+              {rec.type === 'daily' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Every</span>
+                  <input type="number" min="1" max="365"
+                    className="ops-input w-16 text-center text-sm"
+                    value={rec.interval || 1}
+                    onChange={e => setRec('interval', Math.max(1, parseInt(e.target.value) || 1))} />
+                  <span className="text-xs text-gray-400">day(s)</span>
+                </div>
+              )}
+
+              {/* Weekly — day picker + interval */}
+              {rec.type === 'weekly' && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="ops-label">On these days</label>
+                    <div className="flex gap-1">
+                      {WEEK_DAYS.map((d, i) => (
+                        <button key={i} onClick={() => toggleWeekDay(i)}
+                          className={`flex-1 py-1.5 rounded text-[10px] font-semibold border transition-all
+                            ${(rec.days || []).includes(i)
+                              ? 'bg-ops-blue/20 border-ops-blue/60 text-ops-blue'
+                              : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}>
+                          {d[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">Every</span>
+                    <input type="number" min="1" max="52"
+                      className="ops-input w-14 text-center text-sm"
+                      value={rec.interval || 1}
+                      onChange={e => setRec('interval', Math.max(1, parseInt(e.target.value) || 1))} />
+                    <span className="text-xs text-gray-400">week(s)</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Monthly by date */}
+              {rec.type === 'monthly-date' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">On the</span>
+                  <input type="number" min="1" max="31"
+                    className="ops-input w-14 text-center text-sm"
+                    value={rec.monthDay || 1}
+                    onChange={e => setRec('monthDay', Math.min(31, Math.max(1, parseInt(e.target.value) || 1)))} />
+                  <span className="text-xs text-gray-400">of each month</span>
+                </div>
+              )}
+
+              {/* Monthly by weekday */}
+              {rec.type === 'monthly-weekday' && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400">On the</span>
+                  <select
+                    className="ops-input w-auto text-sm"
+                    value={rec.weekNum || 1}
+                    onChange={e => setRec('weekNum', parseInt(e.target.value))}>
+                    {ORDINALS.map((o, i) => <option key={i} value={i+1}>{o}</option>)}
+                  </select>
+                  <select
+                    className="ops-input w-auto text-sm"
+                    value={rec.weekDay ?? 0}
+                    onChange={e => setRec('weekDay', parseInt(e.target.value))}>
+                    {WEEK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                  </select>
+                  <span className="text-xs text-gray-400">of each month</span>
+                </div>
+              )}
+
+              {/* End condition */}
+              <div>
+                <label className="ops-label">Ends</label>
+                <div className="flex gap-1.5 items-center flex-wrap">
+                  <button onClick={() => setRec('endType', 'never')}
+                    className={`text-[10px] px-2.5 py-1 rounded border transition-all
+                      ${rec.endType === 'never'
+                        ? 'bg-ops-blue/20 border-ops-blue/60 text-ops-blue'
+                        : 'border-bunker-600 text-gray-500 hover:border-gray-500'}`}>
+                    Never
+                  </button>
+                  <button onClick={() => setRec('endType', 'date')}
+                    className={`text-[10px] px-2.5 py-1 rounded border transition-all
+                      ${rec.endType === 'date'
+                        ? 'bg-ops-blue/20 border-ops-blue/60 text-ops-blue'
+                        : 'border-bunker-600 text-gray-500 hover:border-gray-500'}`}>
+                    On date
+                  </button>
+                  {rec.endType === 'date' && (
+                    <input type="date" className="ops-input text-sm"
+                      value={rec.endDate || ''}
+                      min={form.startDate}
+                      onChange={e => setRec('endDate', e.target.value)} />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
@@ -218,11 +480,11 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
       {/* Days */}
       <div className="grid grid-cols-7 gap-0.5">
         {days.map(day => {
-          const inMonth = isSameMonth(day, monthDate)
-          const isToday = isSameDay(day, new Date())
-          const isSel   = selected && isSameDay(day, selected)
-          const dayEvents = events.filter(ev => eventCoversDay(ev, day))
-          const sorted    = [...dayEvents].sort((a, b) => {
+          const inMonth  = isSameMonth(day, monthDate)
+          const isToday  = isSameDay(day, new Date())
+          const isSel    = selected && isSameDay(day, selected)
+          const dayEvts  = events.filter(ev => eventOccursOnDay(ev, day))
+          const sorted   = [...dayEvts].sort((a, b) => {
             const aBar = a.allDay || isMultiDay(a)
             const bBar = b.allDay || isMultiDay(b)
             if (aBar && !bBar) return -1
@@ -249,20 +511,23 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
                 {format(day, 'd')}
               </div>
 
-              {/* Mobile: dots only. Desktop: pill labels */}
+              {/* Mobile: dots only */}
               <div className="sm:hidden flex flex-wrap gap-0.5 mt-0.5">
                 {sorted.slice(0, 3).map(ev => {
-                  const subj = subjects.find(s => s.id === ev.subject) || PERSONAL
+                  const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
                   const [r,g,b] = hexRgb(subj.accentColor)
                   return <span key={ev.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `rgb(${r},${g},${b})` }} />
                 })}
                 {sorted.length > 3 && <span className="text-[8px] text-gray-600">+{sorted.length - 3}</span>}
               </div>
+
+              {/* Desktop: pill labels */}
               <div className="hidden sm:block space-y-0.5">
                 {shown.map(ev => {
                   const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
                   const [r,g,b] = hexRgb(subj.accentColor)
                   const isBar   = ev.allDay || isMultiDay(ev)
+                  const isRec   = ev.recurrence && ev.recurrence.type !== 'none'
                   return (
                     <div
                       key={ev.id}
@@ -272,9 +537,15 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
                         ? { backgroundColor: `rgba(${r},${g},${b},0.22)`, color: `rgb(${r},${g},${b})` }
                         : { display: 'flex', alignItems: 'center', gap: '3px' }}
                     >
-                      {isBar ? ev.title : (
+                      {isBar ? (
+                        <span className="flex items-center gap-1 truncate">
+                          {isRec && <Repeat className="w-2 h-2 flex-shrink-0" />}
+                          <span className="truncate">{ev.title}</span>
+                        </span>
+                      ) : (
                         <>
                           <span className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: `rgb(${r},${g},${b})` }} />
+                          {isRec && <Repeat className="w-2 h-2 text-gray-600 flex-shrink-0" />}
                           <span className="truncate text-gray-300">{ev.title}</span>
                         </>
                       )}
@@ -291,7 +562,7 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
   )
 }
 
-// ─── Mini month (compact, dots only) ─────────────────────────────────────────
+// ─── Mini month ───────────────────────────────────────────────────────────────
 
 function MiniMonth({ monthDate, events, subjects, selected, onSelectDay }) {
   const monthStart = startOfMonth(monthDate)
@@ -306,23 +577,18 @@ function MiniMonth({ monthDate, events, subjects, selected, onSelectDay }) {
       <div className="text-center text-xs font-bold text-gray-300 mb-2 tracking-wide">
         {format(monthDate, 'MMMM yyyy')}
       </div>
-
-      {/* Headers — single letter */}
       <div className="grid grid-cols-7 mb-0.5">
         {['M','T','W','T','F','S','S'].map((d, i) => (
           <div key={i} className="text-center text-[9px] text-gray-700 uppercase py-0.5">{d}</div>
         ))}
       </div>
-
-      {/* Days */}
       <div className="grid grid-cols-7 gap-px">
         {days.map(day => {
-          const inMonth = isSameMonth(day, monthDate)
-          const isToday = isSameDay(day, new Date())
-          const isSel   = selected && isSameDay(day, selected)
-          const dayEvents = events.filter(ev => eventCoversDay(ev, day))
-          // One dot per unique subject, max 3
-          const dotSubjects = [...new Map(dayEvents.map(ev => [ev.subject, ev])).values()].slice(0, 3)
+          const inMonth  = isSameMonth(day, monthDate)
+          const isToday  = isSameDay(day, new Date())
+          const isSel    = selected && isSameDay(day, selected)
+          const dayEvts  = events.filter(ev => eventOccursOnDay(ev, day))
+          const dotSubjs = [...new Map(dayEvts.map(ev => [ev.subject, ev])).values()].slice(0, 3)
 
           return (
             <div
@@ -339,9 +605,9 @@ function MiniMonth({ monthDate, events, subjects, selected, onSelectDay }) {
                 ${isToday ? 'bg-ops-green text-bunker-950 font-bold text-[9px]' : 'text-gray-400'}`}>
                 {format(day, 'd')}
               </div>
-              {dotSubjects.length > 0 && (
+              {dotSubjs.length > 0 && (
                 <div className="flex gap-px mt-0.5">
-                  {dotSubjects.map(ev => {
+                  {dotSubjs.map(ev => {
                     const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
                     const [r,g,b] = hexRgb(subj.accentColor)
                     return <div key={ev.subject} className="w-1 h-1 rounded-full" style={{ backgroundColor: `rgb(${r},${g},${b})` }} />
@@ -359,39 +625,37 @@ function MiniMonth({ monthDate, events, subjects, selected, onSelectDay }) {
 // ─── Upcoming events panel ────────────────────────────────────────────────────
 
 function UpcomingPanel({ events, subjects, onEdit }) {
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const upcoming = [...events]
-    .filter(ev => ev.endDate >= today)
-    .sort((a, b) => {
-      const dc = a.startDate.localeCompare(b.startDate)
-      return dc !== 0 ? dc : (a.startTime || '').localeCompare(b.startTime || '')
-    })
-    .slice(0, 10)
+  const instances = useMemo(
+    () => getUpcomingInstances(events, new Date(), 90).slice(0, 12),
+    [events]
+  )
 
   return (
     <div className="ops-card">
       <div className="section-title"><CalendarDays className="w-3.5 h-3.5" />UPCOMING EVENTS</div>
-      {upcoming.length === 0 ? (
+      {instances.length === 0 ? (
         <p className="text-xs text-gray-600">No upcoming events scheduled.</p>
       ) : (
         <div className="space-y-1.5">
-          {upcoming.map(ev => {
+          {instances.map((ev, idx) => {
             const subj     = subjects.find(s => s.id === ev.subject) || PERSONAL
             const [r,g,b]  = hexRgb(subj.accentColor)
             const priority = PRIORITIES.find(p => p.id === ev.priority)
             const multi    = ev.startDate !== ev.endDate
+            const displayDate = ev._date || ev.startDate
+            const recLabel = recurrenceLabel(ev.recurrence)
             return (
               <div
-                key={ev.id}
+                key={`${ev.id}-${displayDate}-${idx}`}
                 onClick={() => onEdit(ev)}
                 className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-bunker-800 transition-colors group"
                 style={{ borderLeft: `3px solid rgba(${r},${g},${b},0.6)` }}
               >
                 {/* Date badge */}
                 <div className="flex-shrink-0 text-center w-8">
-                  <div className="text-[8px] text-gray-600 uppercase leading-none">{format(parseISO(ev.startDate), 'MMM')}</div>
+                  <div className="text-[8px] text-gray-600 uppercase leading-none">{format(parseISO(displayDate), 'MMM')}</div>
                   <div className="text-base font-bold leading-tight" style={{ color: `rgb(${r},${g},${b})` }}>
-                    {format(parseISO(ev.startDate), 'd')}
+                    {format(parseISO(displayDate), 'd')}
                   </div>
                 </div>
 
@@ -417,7 +681,12 @@ function UpcomingPanel({ events, subjects, onEdit }) {
                         {ev.startTime}{ev.endTime ? ` – ${ev.endTime}` : ''}
                       </span>
                     ) : null}
-                    {multi && <span className="text-[9px] text-gray-600">→ {format(parseISO(ev.endDate), 'MMM d')}</span>}
+                    {multi && !recLabel && <span className="text-[9px] text-gray-600">→ {format(parseISO(ev.endDate), 'MMM d')}</span>}
+                    {recLabel && (
+                      <span className="text-[9px] text-ops-blue flex items-center gap-0.5">
+                        <Repeat className="w-2.5 h-2.5" />{recLabel}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -431,9 +700,11 @@ function UpcomingPanel({ events, subjects, onEdit }) {
 
 // ─── Selected day detail ──────────────────────────────────────────────────────
 
-function DayDetail({ day, events, subjects, onEdit, onDelete, onAdd, canAdd }) {
+function DayDetail({ day, events, subjects, onEdit, onDelete, onDeleteOccurrence, onAdd, canAdd }) {
+  const [confirmId, setConfirmId] = useState(null)
+
   const dayEvents = events
-    .filter(ev => eventCoversDay(ev, day))
+    .filter(ev => eventOccursOnDay(ev, day))
     .sort((a, b) => {
       if (a.allDay && !b.allDay) return -1
       if (!a.allDay && b.allDay) return 1
@@ -460,60 +731,91 @@ function DayDetail({ day, events, subjects, onEdit, onDelete, onAdd, canAdd }) {
             const [r,g,b]  = hexRgb(subj.accentColor)
             const priority = PRIORITIES.find(p => p.id === ev.priority)
             const multi    = ev.startDate !== ev.endDate
+            const isRec    = ev.recurrence && ev.recurrence.type !== 'none'
+            const recLabel = recurrenceLabel(ev.recurrence)
+            const showConfirm = confirmId === ev.id
+
             return (
-              <div
-                key={ev.id}
-                className="flex items-start gap-3 p-3 rounded group"
-                style={{ backgroundColor: `rgba(${r},${g},${b},0.05)`, borderLeft: `3px solid rgba(${r},${g},${b},0.5)` }}
-              >
-                {/* Time */}
-                <div className="flex-shrink-0 w-16 text-right pt-0.5">
-                  {ev.allDay ? (
-                    <span className="text-[9px] text-gray-500 uppercase tracking-wider">All Day</span>
-                  ) : ev.startTime ? (
-                    <div>
-                      <div className="text-xs text-gray-400">{ev.startTime}</div>
-                      {ev.endTime && <div className="text-[10px] text-gray-600">{ev.endTime}</div>}
-                    </div>
-                  ) : (
-                    <span className="text-[10px] text-gray-700">—</span>
-                  )}
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-gray-100">{ev.title}</span>
-                    {priority && priority.id !== 'normal' && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ color: priority.color, backgroundColor: `${priority.color}20` }}>
-                        {priority.label}
-                      </span>
+              <div key={ev.id}>
+                <div
+                  className="flex items-start gap-3 p-3 rounded group"
+                  style={{ backgroundColor: `rgba(${r},${g},${b},0.05)`, borderLeft: `3px solid rgba(${r},${g},${b},0.5)` }}
+                >
+                  {/* Time */}
+                  <div className="flex-shrink-0 w-16 text-right pt-0.5">
+                    {ev.allDay ? (
+                      <span className="text-[9px] text-gray-500 uppercase tracking-wider">All Day</span>
+                    ) : ev.startTime ? (
+                      <div>
+                        <div className="text-xs text-gray-400">{ev.startTime}</div>
+                        {ev.endTime && <div className="text-[10px] text-gray-600">{ev.endTime}</div>}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-gray-700">—</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: `rgb(${r},${g},${b})`, borderColor: `rgba(${r},${g},${b},0.4)`, backgroundColor: `rgba(${r},${g},${b},0.08)` }}>
-                      {subj.title}
-                    </span>
-                    {multi && (
-                      <span className="text-[9px] text-gray-500 flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        {format(parseISO(ev.startDate), 'MMM d')} → {format(parseISO(ev.endDate), 'MMM d')}
-                      </span>
-                    )}
-                  </div>
-                  {ev.notes && <p className="text-xs text-gray-500 mt-1">{ev.notes}</p>}
-                  {ev.createdAt && (
-                    <div className="text-[9px] text-gray-700 mt-1">
-                      Created {format(parseISO(ev.createdAt), 'MM/dd/yy HH:mm')}
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm text-gray-100">{ev.title}</span>
+                      {priority && priority.id !== 'normal' && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ color: priority.color, backgroundColor: `${priority.color}20` }}>
+                          {priority.label}
+                        </span>
+                      )}
                     </div>
-                  )}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: `rgb(${r},${g},${b})`, borderColor: `rgba(${r},${g},${b},0.4)`, backgroundColor: `rgba(${r},${g},${b},0.08)` }}>
+                        {subj.title}
+                      </span>
+                      {multi && !recLabel && (
+                        <span className="text-[9px] text-gray-500 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          {format(parseISO(ev.startDate), 'MMM d')} → {format(parseISO(ev.endDate), 'MMM d')}
+                        </span>
+                      )}
+                      {recLabel && (
+                        <span className="text-[9px] text-ops-blue flex items-center gap-0.5">
+                          <Repeat className="w-2.5 h-2.5" />{recLabel}
+                        </span>
+                      )}
+                    </div>
+                    {ev.notes && <p className="text-xs text-gray-500 mt-1">{ev.notes}</p>}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <button onClick={() => onEdit(ev)} className="ops-btn-ghost p-1"><Edit3 className="w-3 h-3" /></button>
+                    <button
+                      onClick={() => isRec ? setConfirmId(ev.id) : onDelete(ev.id)}
+                      className="ops-btn-danger p-1">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  <button onClick={() => onEdit(ev)} className="ops-btn-ghost p-1"><Edit3 className="w-3 h-3" /></button>
-                  <button onClick={() => onDelete(ev.id)} className="ops-btn-danger p-1"><Trash2 className="w-3 h-3" /></button>
-                </div>
+                {/* Recurring delete choice */}
+                {showConfirm && (
+                  <div className="mt-1 ml-3 p-2.5 bg-bunker-800 border border-ops-red/30 rounded-lg flex flex-col gap-2">
+                    <p className="text-[11px] text-gray-400">Delete recurring event:</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { onDeleteOccurrence(ev.id, format(day, 'yyyy-MM-dd')); setConfirmId(null) }}
+                        className="ops-btn text-[10px] border border-ops-amber/50 text-ops-amber bg-ops-amber/10 hover:bg-ops-amber/20 flex-1">
+                        This date only
+                      </button>
+                      <button
+                        onClick={() => { onDelete(ev.id); setConfirmId(null) }}
+                        className="ops-btn-danger text-[10px] flex-1">
+                        All occurrences
+                      </button>
+                      <button onClick={() => setConfirmId(null)} className="ops-btn-ghost text-[10px] px-2">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -537,7 +839,6 @@ export default function Calendar() {
   const [selected, setSelected] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Subjects live from SITREP cards
   const subjects = useMemo(() => {
     const cards = (state.sitrep?.cards || []).map(c => ({
       id: c.id, title: c.title, accentColor: c.accentColor || '#6b7280',
@@ -546,7 +847,6 @@ export default function Calendar() {
     return cards
   }, [state.sitrep?.cards])
 
-  // Deep-link: /calendar?new=1&subject=cardId → auto-open new event modal
   useEffect(() => {
     if (searchParams.get('new') === '1') {
       const ev = blankEvent()
@@ -575,6 +875,17 @@ export default function Calendar() {
   const deleteEvent = (id) => {
     update(s => { s.calendarEvents = (s.calendarEvents || []).filter(e => e.id !== id) })
     setSelected(null)
+  }
+
+  // Add a date to the event's exceptions list (skip just that occurrence)
+  const deleteOccurrence = (id, dateStr) => {
+    update(s => {
+      const idx = (s.calendarEvents || []).findIndex(e => e.id === id)
+      if (idx >= 0) {
+        const exc = s.calendarEvents[idx].exceptions || []
+        if (!exc.includes(dateStr)) s.calendarEvents[idx].exceptions = [...exc, dateStr]
+      }
+    })
   }
 
   const mini1 = addMonths(current, 1)
@@ -613,10 +924,10 @@ export default function Calendar() {
         })}
       </div>
 
-      {/* ── TOP: Upcoming events ── */}
+      {/* Upcoming */}
       <UpcomingPanel events={events} subjects={subjects} onEdit={ev => setModal({ ...ev })} />
 
-      {/* ── Selected day detail (appears right below upcoming when a day is clicked) ── */}
+      {/* Day detail */}
       {selected && (
         <DayDetail
           day={selected}
@@ -624,12 +935,13 @@ export default function Calendar() {
           subjects={subjects}
           onEdit={ev => setModal({ ...ev })}
           onDelete={deleteEvent}
+          onDeleteOccurrence={deleteOccurrence}
           onAdd={() => setModal(blankEvent(format(selected, 'yyyy-MM-dd')))}
           canAdd={!atEventLimit}
         />
       )}
 
-      {/* ── BOTTOM: Main month ── */}
+      {/* Main month grid */}
       <MainMonth
         monthDate={current}
         events={events}
@@ -640,7 +952,7 @@ export default function Calendar() {
         onNav={handleNav}
       />
 
-      {/* ── Two mini months side by side (stack on mobile) ── */}
+      {/* Two mini months */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <MiniMonth monthDate={mini1} events={events} subjects={subjects} selected={selected} onSelectDay={setSelected} />
         <MiniMonth monthDate={mini2} events={events} subjects={subjects} selected={selected} onSelectDay={setSelected} />
