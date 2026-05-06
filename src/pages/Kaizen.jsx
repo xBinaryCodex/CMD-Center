@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { FlaskConical, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { FlaskConical, Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Edit3, Check } from 'lucide-react'
 import { format, parseISO, startOfDay, isToday, isYesterday, subDays, isAfter } from 'date-fns'
 
 // Life areas — universal, not tied to any domain
@@ -18,6 +18,168 @@ const AREA_COLORS = {
   'Personal':      'bg-gray-500/20 text-gray-400 border-gray-500/30',
 }
 
+// ─── Manifestation & Affirmations panel ──────────────────────────────────────
+function ManifestSection({ state, update }) {
+  const todayKey = format(new Date(), 'yyyy-MM-dd')
+
+  const manifest     = state.manifestation || {}
+  const affirmations = manifest.affirmations || ['', '', '']
+  const todayData    = manifest.daily?.[todayKey] || { intention: '', gratitude: ['', '', ''] }
+
+  const [open, setOpen]           = useState(true)
+  const [editingAffirm, setEditingAffirm] = useState(false)
+  const [affirmDraft, setAffirmDraft]     = useState([...affirmations])
+
+  const saveAffirmations = () => {
+    update(s => {
+      if (!s.manifestation) s.manifestation = {}
+      s.manifestation.affirmations = affirmDraft
+    })
+    setEditingAffirm(false)
+  }
+
+  const startEdit = () => {
+    setAffirmDraft([...affirmations])
+    setEditingAffirm(true)
+  }
+
+  const setIntention = (val) => {
+    update(s => {
+      if (!s.manifestation) s.manifestation = {}
+      if (!s.manifestation.daily) s.manifestation.daily = {}
+      if (!s.manifestation.daily[todayKey]) s.manifestation.daily[todayKey] = { intention: '', gratitude: ['', '', ''] }
+      s.manifestation.daily[todayKey].intention = val
+    })
+  }
+
+  const setGratitude = (idx, val) => {
+    update(s => {
+      if (!s.manifestation) s.manifestation = {}
+      if (!s.manifestation.daily) s.manifestation.daily = {}
+      if (!s.manifestation.daily[todayKey]) s.manifestation.daily[todayKey] = { intention: '', gratitude: ['', '', ''] }
+      const g = [...(s.manifestation.daily[todayKey].gratitude || ['', '', ''])]
+      g[idx] = val
+      s.manifestation.daily[todayKey].gratitude = g
+    })
+  }
+
+  const filledToday = (todayData.gratitude || []).filter(Boolean).length + (todayData.intention ? 1 : 0)
+
+  return (
+    <div className="bg-bunker-900 border border-purple-500/20 rounded-lg p-4"
+      style={{ boxShadow: '0 0 16px rgba(168,85,247,0.06)' }}>
+
+      {/* Header */}
+      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full">
+        <div className="flex items-center gap-2 text-xs text-purple-400 uppercase tracking-widest font-semibold">
+          <Sparkles className="w-3.5 h-3.5" />
+          Manifestation &amp; Affirmations
+          {filledToday > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-400 normal-case tracking-normal">
+              {filledToday}/4 today
+            </span>
+          )}
+        </div>
+        {open
+          ? <ChevronUp className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
+          : <ChevronDown className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-5">
+
+          {/* ── Affirmations ── */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="ops-label mb-0">Daily Affirmations</label>
+              {editingAffirm ? (
+                <button onClick={saveAffirmations}
+                  className="flex items-center gap-1 text-[10px] text-ops-green hover:text-ops-green/80 transition-colors">
+                  <Check className="w-3 h-3" /> Save
+                </button>
+              ) : (
+                <button onClick={startEdit}
+                  className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-gray-300 transition-colors">
+                  <Edit3 className="w-3 h-3" /> Edit
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {[0, 1, 2].map(i => (
+                editingAffirm ? (
+                  <input
+                    key={i}
+                    className="ops-input text-sm"
+                    placeholder={`Affirmation ${i + 1} — I am…`}
+                    value={affirmDraft[i] || ''}
+                    onChange={e => {
+                      const d = [...affirmDraft]
+                      d[i] = e.target.value
+                      setAffirmDraft(d)
+                    }}
+                    onKeyDown={e => e.key === 'Enter' && saveAffirmations()}
+                  />
+                ) : (
+                  <div key={i}
+                    className="text-sm px-3 py-2 bg-bunker-800 rounded border border-bunker-600 min-h-[38px] flex items-center">
+                    {affirmations[i]
+                      ? <span className="text-purple-300 italic">&ldquo;{affirmations[i]}&rdquo;</span>
+                      : <span className="text-gray-700 text-xs">No affirmation set — click Edit</span>}
+                  </div>
+                )
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-700 mt-1.5">
+              Affirmations are saved permanently and shown every day.
+            </p>
+          </div>
+
+          {/* ── Today's Intention ── */}
+          <div>
+            <label className="ops-label">Today's Intention</label>
+            <input
+              className="ops-input text-sm"
+              placeholder="I intend to…"
+              value={todayData.intention || ''}
+              onChange={e => setIntention(e.target.value)}
+            />
+            <p className="text-[10px] text-gray-700 mt-1">
+              Set the energy and focus you're calling in today.
+            </p>
+          </div>
+
+          {/* ── Gratitude ── */}
+          <div>
+            <label className="ops-label">Gratitude — 3 things</label>
+            <div className="space-y-2">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[11px] text-purple-500/50 font-bold w-4 flex-shrink-0 text-center">{i + 1}</span>
+                  <input
+                    className="ops-input text-sm"
+                    placeholder="I'm grateful for…"
+                    value={(todayData.gratitude || [])[i] || ''}
+                    onChange={e => setGratitude(i, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Divider callout */}
+          <div className="border-t border-purple-500/10 pt-3 text-center">
+            <p className="text-[10px] text-purple-500/40 tracking-wider italic">
+              What you appreciate, appreciates. — logged {format(new Date(), 'MMMM d, yyyy')}
+            </p>
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Journal entry row ────────────────────────────────────────────────────────
 function JournalEntry({ entry, onDelete }) {
   const [open, setOpen] = useState(false)
   return (
@@ -74,16 +236,17 @@ function JournalEntry({ entry, onDelete }) {
   )
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Kaizen() {
   const { state, update, addXp, ts } = useStore()
   const entries = state.kaizen || []
 
-  const [what, setWhat]             = useState('')
-  const [why, setWhy]               = useState('')
+  const [what, setWhat]               = useState('')
+  const [why, setWhy]                 = useState('')
   const [improvement, setImprovement] = useState('')
-  const [lesson, setLesson]         = useState('')
-  const [area, setArea]             = useState('Personal')
-  const [filter, setFilter]         = useState('all')
+  const [lesson, setLesson]           = useState('')
+  const [area, setArea]               = useState('Personal')
+  const [filter, setFilter]           = useState('all')
 
   const submit = () => {
     if (!what.trim()) return
@@ -127,9 +290,12 @@ export default function Kaizen() {
         </div>
       </div>
 
+      {/* Manifestation & Affirmations */}
+      <ManifestSection state={state} update={update} />
+
       {/* New entry form */}
       <div className="ops-card-glow space-y-3">
-        <div className="section-title"><Plus className="w-3.5 h-3.5 text-ops-cyan" /> New Entry</div>
+        <div className="section-title"><Plus className="w-3.5 h-3.5 text-ops-cyan" /> New Kaizen Entry</div>
         <div>
           <label className="ops-label">What happened / what did you observe? *</label>
           <textarea className="ops-textarea min-h-[70px]" value={what} onChange={e => setWhat(e.target.value)}

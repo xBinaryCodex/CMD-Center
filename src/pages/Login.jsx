@@ -62,7 +62,7 @@ export default function Login() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-2">
             <Terminal className="w-8 h-8 text-ops-green" />
-            <span className="text-2xl font-bold text-ops-green tracking-widest">CMD CENTER</span>
+            <span className="text-2xl font-bold text-ops-green tracking-widest">ALIGNED</span>
           </div>
           <p className="text-xs text-gray-600 tracking-wider">SECURE ACCESS — AUTHENTICATE TO CONTINUE</p>
         </div>

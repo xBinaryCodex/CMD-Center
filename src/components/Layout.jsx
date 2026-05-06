@@ -142,7 +142,7 @@ function DeleteModal({ onConfirm, onCancel }) {
 export default function Layout({ children }) {
   const [collapsed, setCollapsed]             = useState(false)
   const [synced, setSynced]                   = useState(true)
-  const [theme, setTheme]                     = useState(() => localStorage.getItem('cmdcenter_theme') || 'dark')
+  const [theme, setTheme]                     = useState(() => localStorage.getItem('aligned_theme') || 'dark')
   const [editingName, setEditingName]         = useState(false)
   const [nameDraft, setNameDraft]             = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -163,7 +163,7 @@ export default function Layout({ children }) {
   // Apply theme class to <html> and persist
   useEffect(() => {
     document.documentElement.classList.toggle('light', theme === 'light')
-    localStorage.setItem('cmdcenter_theme', theme)
+    localStorage.setItem('aligned_theme', theme)
   }, [theme])
 
   // Flash sync indicator on state change
@@ -215,7 +215,7 @@ export default function Layout({ children }) {
       {/* Logo + name */}
       <div className="px-3 py-3 border-b border-bunker-700">
         <div className="flex items-center justify-between">
-          <div className="text-ops-green font-bold text-sm tracking-widest">CMD CENTER</div>
+          <div className="text-ops-green font-bold text-sm tracking-widest">ALIGNED</div>
           {onClose && (
             <button onClick={onClose} className="p-1 text-gray-500 hover:text-gray-200">
               <X className="w-4 h-4" />
@@ -371,7 +371,7 @@ export default function Layout({ children }) {
             {/* Expanded header */}
             <div className="flex items-center justify-between px-3 py-3 border-b border-bunker-700">
               <div className="flex-1 min-w-0 mr-1">
-                <div className="text-ops-green font-bold text-sm tracking-widest">CMD CENTER</div>
+                <div className="text-ops-green font-bold text-sm tracking-widest">ALIGNED</div>
                 {editingName ? (
                   <div className="flex items-center gap-1 mt-0.5">
                     <input autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)}
@@ -493,7 +493,7 @@ export default function Layout({ children }) {
               {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
             {/* Mobile: just show app name */}
-            <span className="text-ops-green font-bold text-sm tracking-widest lg:hidden">CMD CENTER</span>
+            <span className="text-ops-green font-bold text-sm tracking-widest lg:hidden">ALIGNED</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-[10px] text-gray-600 font-mono hidden sm:block">

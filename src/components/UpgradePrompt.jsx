@@ -54,7 +54,7 @@ export default function UpgradePrompt({ feature }) {
       <div>
         <h2 className="text-lg font-bold text-gray-200">Pro Feature</h2>
         <p className="text-sm text-gray-500 mt-1 max-w-xs">
-          <span className="text-ops-amber font-semibold">{feature}</span> is included in CMD Center Pro.
+          <span className="text-ops-amber font-semibold">{feature}</span> is included in Aligned Pro.
         </p>
       </div>
 
