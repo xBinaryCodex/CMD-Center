@@ -10,7 +10,7 @@ import {
   ChevronRight, ChevronLeft, Shield, Zap, Trophy,
   Brain, Map, Cloud, CloudOff, LogOut,
   Code, Database, Globe, Server, Star, Cpu, Target,
-  Sun, Moon, Edit3, Check, X, Trash2, Menu,
+  Sun, Moon, Edit3, Check, X, Trash2, Menu, Info,
 } from 'lucide-react'
 
 // ─── Icon map for dynamic domain cards ───────────────────────────────────────
@@ -30,6 +30,7 @@ const TOP_NAV = [
 const TOOLS_NAV = [
   { to: '/kaizen', label: 'Kaizen', icon: FlaskConical },
   { to: '/focus',  label: 'Focus',  icon: Timer        },
+  { to: '/about',  label: 'About',  icon: Info         },
 ]
 
 // Bottom nav (mobile) — 4 most-used items + More

@@ -14,6 +14,7 @@ import GameDev from './pages/GameDev'
 import SafeDays from './pages/SafeDays'
 import Kaizen from './pages/Kaizen'
 import Focus from './pages/Focus'
+import About from './pages/About'
 import { Loader } from 'lucide-react'
 
 function ProtectedRoutes() {
@@ -32,6 +33,7 @@ function ProtectedRoutes() {
         <Route path="/safedays"      element={<SafeDays />} />
         <Route path="/kaizen"        element={<Kaizen />} />
         <Route path="/focus"         element={<Focus />} />
+        <Route path="/about"         element={<About />} />
         <Route path="*"              element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
