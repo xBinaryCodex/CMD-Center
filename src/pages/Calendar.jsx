@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore'
+import GoogleSync from '../components/GoogleSync'
 import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock, Repeat, Columns, AlignJustify, Map as MapIcon } from 'lucide-react'
 import { isPlanPro, FREE_EVENT_LIMIT } from '../lib/plans'
 import {
@@ -1055,17 +1056,20 @@ export default function Calendar() {
         </div>
       </div>
 
-      {/* Domain legend */}
-      <div className="flex flex-wrap gap-1.5">
-        {subjects.map(s => {
-          const [r,g,b] = hexRgb(s.accentColor)
-          return (
-            <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-full border"
-              style={{ color: `rgb(${r},${g},${b})`, borderColor: `rgba(${r},${g},${b},0.4)`, backgroundColor: `rgba(${r},${g},${b},0.08)` }}>
-              {s.title}
-            </span>
-          )
-        })}
+      {/* Domain legend + Google Sync */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex flex-wrap gap-1.5">
+          {subjects.map(s => {
+            const [r,g,b] = hexRgb(s.accentColor)
+            return (
+              <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-full border"
+                style={{ color: `rgb(${r},${g},${b})`, borderColor: `rgba(${r},${g},${b},0.4)`, backgroundColor: `rgba(${r},${g},${b},0.08)` }}>
+                {s.title}
+              </span>
+            )
+          })}
+        </div>
+        <GoogleSync />
       </div>
 
       {/* Upcoming */}
