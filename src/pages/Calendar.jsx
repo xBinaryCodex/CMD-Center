@@ -460,7 +460,7 @@ function EventModal({ event, subjects, onSave, onClose }) {
 
 // ─── Full month grid (main) ───────────────────────────────────────────────────
 
-function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditEvent, onNav }) {
+function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditEvent, onNav, battlePlanBlocks, showBattlePlan }) {
   const monthStart = startOfMonth(monthDate)
   const monthEnd   = endOfMonth(monthDate)
   const days       = eachDayOfInterval({
@@ -496,7 +496,9 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
           const inMonth  = isSameMonth(day, monthDate)
           const isToday  = isSameDay(day, new Date())
           const isSel    = selected && isSameDay(day, selected)
+          const dayStr   = format(day, 'yyyy-MM-dd')
           const dayEvts  = events.filter(ev => eventOccursOnDay(ev, day))
+          const bpBlocks = showBattlePlan ? (battlePlanBlocks[dayStr] || []) : []
           const sorted   = [...dayEvts].sort((a, b) => {
             const aBar = a.allDay || isMultiDay(a)
             const bBar = b.allDay || isMultiDay(b)
@@ -504,8 +506,12 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
             if (!aBar && bBar) return 1
             return (a.startTime || '').localeCompare(b.startTime || '')
           })
-          const shown    = sorted.slice(0, 2)
-          const overflow = sorted.length - 2
+
+          // How many rows we have: battle plan blocks first (max 1 row), then events
+          const bpShown    = bpBlocks.slice(0, 1)
+          const evtSlots   = bpBlocks.length > 0 ? 1 : 2
+          const shown      = sorted.slice(0, evtSlots)
+          const overflow   = sorted.length - evtSlots + (bpBlocks.length > 1 ? bpBlocks.length - 1 : 0)
 
           return (
             <div
@@ -526,16 +532,36 @@ function MainMonth({ monthDate, events, subjects, selected, onSelectDay, onEditE
 
               {/* Mobile: dots only */}
               <div className="sm:hidden flex flex-wrap gap-0.5 mt-0.5">
+                {bpBlocks.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-sm bg-ops-amber/70" title="Battle Plan" />
+                )}
                 {sorted.slice(0, 3).map(ev => {
                   const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
                   const [r,g,b] = hexRgb(subj.accentColor)
                   return <span key={ev.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `rgb(${r},${g},${b})` }} />
                 })}
-                {sorted.length > 3 && <span className="text-[8px] text-gray-600">+{sorted.length - 3}</span>}
+                {(sorted.length + bpBlocks.length) > 4 && (
+                  <span className="text-[8px] text-gray-600">+{sorted.length + bpBlocks.length - 4}</span>
+                )}
               </div>
 
               {/* Desktop: pill labels */}
               <div className="hidden sm:block space-y-0.5">
+                {/* Battle plan blocks — amber pills */}
+                {bpShown.map((b, i) => {
+                  const cat = CATEGORIES.find(c => c.id === b.category) || CATEGORIES[CATEGORIES.length - 1]
+                  return (
+                    <div key={`bp-${i}`}
+                      className="text-[9px] px-1 py-0.5 rounded truncate leading-tight flex items-center gap-0.5"
+                      style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}
+                    >
+                      <span className="flex-shrink-0 text-[8px]">{cat.icon}</span>
+                      <span className="truncate">{b.text}</span>
+                    </div>
+                  )
+                })}
+
+                {/* Calendar events */}
                 {shown.map(ev => {
                   const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
                   const [r,g,b] = hexRgb(subj.accentColor)
@@ -1100,6 +1126,8 @@ export default function Calendar() {
         onSelectDay={setSelected}
         onEditEvent={ev => setModal({ ...ev })}
         onNav={handleNav}
+        battlePlanBlocks={battlePlanBlocks}
+        showBattlePlan={showBattlePlan}
       />
 
       {/* Two mini months */}
