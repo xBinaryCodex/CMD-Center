@@ -1039,7 +1039,7 @@ export default function Calendar() {
                 ? 'border-ops-amber/50 text-ops-amber bg-ops-amber/10'
                 : 'border-bunker-600 text-gray-500 hover:border-gray-500 hover:text-gray-300'}`}
           >
-            <Map className="w-3.5 h-3.5" />
+            <MapIcon className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Battle Plan</span>
           </button>
 
