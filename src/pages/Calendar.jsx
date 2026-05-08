@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore'
-import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock, Repeat, Columns, AlignJustify, Map } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock, Repeat, Columns, AlignJustify, Map as MapIcon } from 'lucide-react'
 import { isPlanPro, FREE_EVENT_LIMIT } from '../lib/plans'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -832,7 +832,7 @@ function DayDetail({ day, events, subjects, onEdit, onDelete, onDeleteOccurrence
           {bpBlocks.length > 0 && (
             <div className="mb-3 space-y-1.5">
               <p className="text-[10px] text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
-                <Map className="w-3 h-3" /> Battle Plan
+                <MapIcon className="w-3 h-3" /> Battle Plan
               </p>
               {bpBlocks.map((b, i) => {
                 const c = CATEGORIES.find(x => x.id === b.category) || CATEGORIES[CATEGORIES.length - 1]

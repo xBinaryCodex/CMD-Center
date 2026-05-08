@@ -4,11 +4,23 @@ import { Timer, Play, Pause, RotateCcw, CheckCircle, XCircle, ChevronDown, Chevr
 import { format, parseISO } from 'date-fns'
 import { isPlanPro } from '../lib/plans'
 
-// Web Audio chime — no file needed, works everywhere
+// Shared AudioContext — created on first user gesture so iOS/mobile allows it
+let _audioCtx = null
+function getAudioCtx() {
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)() } catch (e) {}
+  }
+  if (_audioCtx && _audioCtx.state === 'suspended') {
+    _audioCtx.resume().catch(() => {})
+  }
+  return _audioCtx
+}
+
 function playChime() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const notes = [523, 659, 784] // C5 E5 G5 — pleasant major chord
+    const ctx = getAudioCtx()
+    if (!ctx) return
+    const notes = [523, 659, 784] // C5 E5 G5 — major chord
     notes.forEach((freq, i) => {
       const osc  = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -22,7 +34,7 @@ function playChime() {
       osc.start(ctx.currentTime + i * 0.28)
       osc.stop(ctx.currentTime + i * 0.28 + 0.9)
     })
-  } catch (e) { /* silently ignore if AudioContext unavailable */ }
+  } catch (e) {}
 }
 
 const PRESETS = [
@@ -101,6 +113,7 @@ export default function Focus() {
 
   const start = () => {
     if (!focusLabel.trim()) return
+    getAudioCtx() // warm up AudioContext on user gesture so iOS allows it later
     setStartedAt(ts())
     setRunning(true)
   }
