@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore'
-import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock, Repeat } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Edit3, Trash2, Clock, CalendarDays, Lock, Repeat, Columns, AlignJustify, Map } from 'lucide-react'
 import { isPlanPro, FREE_EVENT_LIMIT } from '../lib/plans'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths,
-  addDays, parseISO, getDay, getDate, differenceInDays,
+  addDays, parseISO, getDay, getDate, differenceInDays, isSameWeek,
 } from 'date-fns'
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -19,6 +19,18 @@ function hexRgb(hex) {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PERSONAL = { id: 'personal', title: 'Personal', accentColor: '#6b7280' }
+
+const CATEGORIES = [
+  { id: 'workout',   label: 'Workout',   icon: '🏋️', color: '#ef4444' },
+  { id: 'study',     label: 'Study',     icon: '📚', color: '#a78bfa' },
+  { id: 'work',      label: 'Work',      icon: '💼', color: '#38bdf8' },
+  { id: 'recovery',  label: 'Recovery',  icon: '🧘', color: '#00ff88' },
+  { id: 'nutrition', label: 'Nutrition', icon: '🥗', color: '#f59e0b' },
+  { id: 'project',   label: 'Project',   icon: '⚡', color: '#a3e635' },
+  { id: 'habit',     label: 'Habit',     icon: '🔁', color: '#22d3ee' },
+  { id: 'social',    label: 'Social',    icon: '🤝', color: '#f472b6' },
+  { id: 'custom',    label: 'Custom',    icon: '📌', color: '#6b7280' },
+]
 
 const PRIORITIES = [
   { id: 'low',      label: 'Low',      color: '#22d3ee' },
@@ -698,11 +710,80 @@ function UpcomingPanel({ events, subjects, onEdit }) {
   )
 }
 
-// ─── Selected day detail ──────────────────────────────────────────────────────
+// ─── Selected day / week detail ───────────────────────────────────────────────
 
-function DayDetail({ day, events, subjects, onEdit, onDelete, onDeleteOccurrence, onAdd, canAdd }) {
+function EventRow({ ev, subjects, onEdit, onDelete, onDeleteOccurrence, dayStr, showConfirm, setConfirmId }) {
+  const subj     = subjects.find(s => s.id === ev.subject) || PERSONAL
+  const [r,g,b]  = hexRgb(subj.accentColor)
+  const priority = PRIORITIES.find(p => p.id === ev.priority)
+  const isRec    = ev.recurrence && ev.recurrence.type !== 'none'
+  const recLabel = recurrenceLabel(ev.recurrence)
+  return (
+    <div>
+      <div className="flex items-start gap-3 p-3 rounded group"
+        style={{ backgroundColor: `rgba(${r},${g},${b},0.05)`, borderLeft: `3px solid rgba(${r},${g},${b},0.5)` }}>
+        <div className="flex-shrink-0 w-16 text-right pt-0.5">
+          {ev.allDay
+            ? <span className="text-[9px] text-gray-500 uppercase tracking-wider">All Day</span>
+            : ev.startTime
+              ? <><p className="text-xs font-semibold" style={{ color: `rgb(${r},${g},${b})` }}>{ev.startTime}</p>
+                  {ev.endTime && <p className="text-[9px] text-gray-600">{ev.endTime}</p>}</>
+              : <span className="text-[9px] text-gray-600">—</span>}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-semibold text-gray-100 truncate">{ev.title}</span>
+            {priority && priority.id !== 'normal' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                style={{ color: priority.color, backgroundColor: `${priority.color}20` }}>{priority.label}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full border"
+              style={{ color: `rgb(${r},${g},${b})`, borderColor: `rgba(${r},${g},${b},0.4)`, backgroundColor: `rgba(${r},${g},${b},0.08)` }}>
+              {subj.title}
+            </span>
+            {recLabel && <span className="text-[9px] text-ops-blue flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" />{recLabel}</span>}
+            {ev.notes && <span className="text-[9px] text-gray-600 truncate max-w-[120px]">{ev.notes}</span>}
+          </div>
+        </div>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          <button onClick={() => onEdit(ev)} className="p-1 text-gray-600 hover:text-ops-blue"><Edit3 className="w-3 h-3" /></button>
+          <button onClick={() => setConfirmId(ev.id)} className="p-1 text-gray-600 hover:text-ops-red"><Trash2 className="w-3 h-3" /></button>
+        </div>
+      </div>
+      {showConfirm && (
+        <div className="mt-1 p-2 rounded bg-ops-red/10 border border-ops-red/30 flex items-center gap-2">
+          <span className="text-[10px] text-ops-red flex-1">
+            {isRec ? 'Delete just this date or all occurrences?' : 'Delete this event?'}
+          </span>
+          {isRec && (
+            <button onClick={() => { onDeleteOccurrence(ev.id, dayStr); setConfirmId(null) }}
+              className="text-[10px] px-2 py-0.5 rounded border border-ops-amber/50 text-ops-amber hover:bg-ops-amber/10">
+              This date
+            </button>
+          )}
+          <button onClick={() => { onDelete(ev.id); setConfirmId(null) }}
+            className="text-[10px] px-2 py-0.5 rounded border border-ops-red/50 text-ops-red hover:bg-ops-red/10">
+            {isRec ? 'All' : 'Delete'}
+          </button>
+          <button onClick={() => setConfirmId(null)} className="text-[10px] text-gray-600 hover:text-gray-300">Cancel</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DayDetail({ day, events, subjects, onEdit, onDelete, onDeleteOccurrence, onAdd, canAdd, showBattlePlan, battlePlanBlocks }) {
   const [confirmId, setConfirmId] = useState(null)
+  const [view, setView]           = useState('day') // 'day' | 'week'
 
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(day, { weekStartsOn: 1 })
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i))
+  }, [day])
+
+  const dayStr    = format(day, 'yyyy-MM-dd')
   const dayEvents = events
     .filter(ev => eventOccursOnDay(ev, day))
     .sort((a, b) => {
@@ -711,111 +792,130 @@ function DayDetail({ day, events, subjects, onEdit, onDelete, onDeleteOccurrence
       return (a.startTime || '').localeCompare(b.startTime || '')
     })
 
+  const bpBlocks = showBattlePlan ? (battlePlanBlocks[dayStr] || []) : []
+
   return (
     <div className="ops-card">
+      {/* Header with day/week toggle */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-100">{format(day, 'EEEE, MMMM d')}</h3>
-        {canAdd && (
-          <button onClick={onAdd} className="ops-btn-primary flex items-center gap-1">
-            <Plus className="w-3 h-3" /> Add
-          </button>
-        )}
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-sm font-bold text-gray-100 truncate">
+            {view === 'day' ? format(day, 'EEEE, MMMM d') : `Week of ${format(weekDays[0], 'MMM d')}`}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Day / Week toggle */}
+          <div className="flex rounded border border-bunker-600 overflow-hidden text-[10px]">
+            <button onClick={() => setView('day')}
+              className={`px-2 py-1 flex items-center gap-1 transition-colors
+                ${view === 'day' ? 'bg-ops-blue/20 text-ops-blue' : 'text-gray-500 hover:text-gray-300'}`}>
+              <AlignJustify className="w-3 h-3" /> Day
+            </button>
+            <button onClick={() => setView('week')}
+              className={`px-2 py-1 flex items-center gap-1 border-l border-bunker-600 transition-colors
+                ${view === 'week' ? 'bg-ops-blue/20 text-ops-blue' : 'text-gray-500 hover:text-gray-300'}`}>
+              <Columns className="w-3 h-3" /> Week
+            </button>
+          </div>
+          {canAdd && (
+            <button onClick={onAdd} className="ops-btn-primary flex items-center gap-1">
+              <Plus className="w-3 h-3" /> Add
+            </button>
+          )}
+        </div>
       </div>
 
-      {dayEvents.length === 0 ? (
-        <p className="text-xs text-gray-600">No events. Click Add to create one.</p>
-      ) : (
-        <div className="space-y-2">
-          {dayEvents.map(ev => {
-            const subj     = subjects.find(s => s.id === ev.subject) || PERSONAL
-            const [r,g,b]  = hexRgb(subj.accentColor)
-            const priority = PRIORITIES.find(p => p.id === ev.priority)
-            const multi    = ev.startDate !== ev.endDate
-            const isRec    = ev.recurrence && ev.recurrence.type !== 'none'
-            const recLabel = recurrenceLabel(ev.recurrence)
-            const showConfirm = confirmId === ev.id
+      {/* ── Day view ── */}
+      {view === 'day' && (
+        <>
+          {/* Battle plan blocks for this day */}
+          {bpBlocks.length > 0 && (
+            <div className="mb-3 space-y-1.5">
+              <p className="text-[10px] text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                <Map className="w-3 h-3" /> Battle Plan
+              </p>
+              {bpBlocks.map((b, i) => {
+                const c = CATEGORIES.find(x => x.id === b.category) || CATEGORIES[CATEGORIES.length - 1]
+                const [r,g,b2] = hexRgb(c.color)
+                return (
+                  <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded"
+                    style={{ backgroundColor: `rgba(${r},${g},${b2},0.08)`, borderLeft: `3px solid rgba(${r},${g},${b2},0.5)` }}>
+                    <span className="text-[10px]">{c.icon}</span>
+                    <span className="text-xs text-gray-300">{b.text}</span>
+                    {b.startTime && <span className="text-[10px] text-gray-600 ml-auto">{b.startTime}{b.endTime ? `–${b.endTime}` : ''}</span>}
+                    {b.done && <span className="text-[9px] text-ops-green ml-1">✓</span>}
+                  </div>
+                )
+              })}
+              <div className="border-t border-bunker-700 pt-2 mt-2" />
+            </div>
+          )}
+
+          {dayEvents.length === 0 ? (
+            <p className="text-xs text-gray-600">No events. Click Add to create one.</p>
+          ) : (
+            <div className="space-y-2">
+              {dayEvents.map(ev => (
+                <EventRow key={ev.id} ev={ev} subjects={subjects} onEdit={onEdit}
+                  onDelete={onDelete} onDeleteOccurrence={onDeleteOccurrence}
+                  dayStr={dayStr} showConfirm={confirmId === ev.id} setConfirmId={setConfirmId} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Week view ── */}
+      {view === 'week' && (
+        <div className="space-y-3">
+          {weekDays.map(wd => {
+            const wdStr    = format(wd, 'yyyy-MM-dd')
+            const wdEvents = events.filter(ev => eventOccursOnDay(ev, wd))
+              .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+            const wdBp     = showBattlePlan ? (battlePlanBlocks[wdStr] || []) : []
+            const isToday  = wdStr === format(new Date(), 'yyyy-MM-dd')
+            const isSel    = wdStr === dayStr
 
             return (
-              <div key={ev.id}>
-                <div
-                  className="flex items-start gap-3 p-3 rounded group"
-                  style={{ backgroundColor: `rgba(${r},${g},${b},0.05)`, borderLeft: `3px solid rgba(${r},${g},${b},0.5)` }}
-                >
-                  {/* Time */}
-                  <div className="flex-shrink-0 w-16 text-right pt-0.5">
-                    {ev.allDay ? (
-                      <span className="text-[9px] text-gray-500 uppercase tracking-wider">All Day</span>
-                    ) : ev.startTime ? (
-                      <div>
-                        <div className="text-xs text-gray-400">{ev.startTime}</div>
-                        {ev.endTime && <div className="text-[10px] text-gray-600">{ev.endTime}</div>}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-gray-700">—</span>
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-gray-100">{ev.title}</span>
-                      {priority && priority.id !== 'normal' && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ color: priority.color, backgroundColor: `${priority.color}20` }}>
-                          {priority.label}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: `rgb(${r},${g},${b})`, borderColor: `rgba(${r},${g},${b},0.4)`, backgroundColor: `rgba(${r},${g},${b},0.08)` }}>
-                        {subj.title}
-                      </span>
-                      {multi && !recLabel && (
-                        <span className="text-[9px] text-gray-500 flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5" />
-                          {format(parseISO(ev.startDate), 'MMM d')} → {format(parseISO(ev.endDate), 'MMM d')}
-                        </span>
-                      )}
-                      {recLabel && (
-                        <span className="text-[9px] text-ops-blue flex items-center gap-0.5">
-                          <Repeat className="w-2.5 h-2.5" />{recLabel}
-                        </span>
-                      )}
-                    </div>
-                    {ev.notes && <p className="text-xs text-gray-500 mt-1">{ev.notes}</p>}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button onClick={() => onEdit(ev)} className="ops-btn-ghost p-1"><Edit3 className="w-3 h-3" /></button>
-                    <button
-                      onClick={() => isRec ? setConfirmId(ev.id) : onDelete(ev.id)}
-                      className="ops-btn-danger p-1">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+              <div key={wdStr} className={`rounded border p-2 ${isSel ? 'border-ops-blue/40 bg-ops-blue/5' : isToday ? 'border-ops-green/30 bg-ops-green/5' : 'border-bunker-700'}`}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className={`text-xs font-semibold ${isToday ? 'text-ops-green' : isSel ? 'text-ops-blue' : 'text-gray-400'}`}>
+                    {format(wd, 'EEE')}
+                  </span>
+                  <span className={`text-[10px] w-5 h-5 flex items-center justify-center rounded-full
+                    ${isToday ? 'bg-ops-green text-bunker-950 font-bold' : 'text-gray-500'}`}>
+                    {format(wd, 'd')}
+                  </span>
+                  {wdEvents.length === 0 && wdBp.length === 0 && (
+                    <span className="text-[10px] text-gray-700 italic">—</span>
+                  )}
                 </div>
-
-                {/* Recurring delete choice */}
-                {showConfirm && (
-                  <div className="mt-1 ml-3 p-2.5 bg-bunker-800 border border-ops-red/30 rounded-lg flex flex-col gap-2">
-                    <p className="text-[11px] text-gray-400">Delete recurring event:</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { onDeleteOccurrence(ev.id, format(day, 'yyyy-MM-dd')); setConfirmId(null) }}
-                        className="ops-btn text-[10px] border border-ops-amber/50 text-ops-amber bg-ops-amber/10 hover:bg-ops-amber/20 flex-1">
-                        This date only
-                      </button>
-                      <button
-                        onClick={() => { onDelete(ev.id); setConfirmId(null) }}
-                        className="ops-btn-danger text-[10px] flex-1">
-                        All occurrences
-                      </button>
-                      <button onClick={() => setConfirmId(null)} className="ops-btn-ghost text-[10px] px-2">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-1">
+                  {wdBp.map((b, i) => {
+                    const cat2 = CATEGORIES.find(x => x.id === b.category) || CATEGORIES[CATEGORIES.length - 1]
+                    const [r,g,b2] = hexRgb(cat2.color)
+                    return (
+                      <div key={`bp-${i}`} className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px]"
+                        style={{ backgroundColor: `rgba(${r},${g},${b2},0.08)`, borderLeft: `2px solid rgba(${r},${g},${b2},0.5)` }}>
+                        <span>{cat2.icon}</span>
+                        <span className="text-gray-400 truncate">{b.text}</span>
+                      </div>
+                    )
+                  })}
+                  {wdEvents.map(ev => {
+                    const subj    = subjects.find(s => s.id === ev.subject) || PERSONAL
+                    const [r,g,b] = hexRgb(subj.accentColor)
+                    return (
+                      <div key={ev.id} onClick={() => onEdit(ev)}
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] cursor-pointer hover:opacity-80"
+                        style={{ backgroundColor: `rgba(${r},${g},${b},0.1)`, borderLeft: `2px solid rgba(${r},${g},${b},0.6)` }}>
+                        {ev.startTime && <span className="text-gray-500 flex-shrink-0">{ev.startTime}</span>}
+                        <span className="text-gray-200 truncate font-medium">{ev.title}</span>
+                        {ev.priority === 'critical' && <span className="text-ops-red ml-auto flex-shrink-0">!</span>}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )
           })}
@@ -834,10 +934,35 @@ export default function Calendar() {
   const isPro     = isPlanPro(state.profile.plan)
   const atEventLimit = !isPro && rawEvents.length >= FREE_EVENT_LIMIT
 
-  const [current, setCurrent]   = useState(new Date())
-  const [modal, setModal]       = useState(null)
-  const [selected, setSelected] = useState(null)
+  const [current, setCurrent]       = useState(new Date())
+  const [modal, setModal]           = useState(null)
+  const [selected, setSelected]     = useState(null)
+  const [showBattlePlan, setShowBattlePlan] = useState(() => localStorage.getItem('aligned_bp_cal') === 'on')
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // Flatten battle plan blocks into a map keyed by 'yyyy-MM-dd'
+  const battlePlanBlocks = useMemo(() => {
+    if (!showBattlePlan) return {}
+    const weeks = state.battlePlan?.weeks || {}
+    const map   = {}
+    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    Object.entries(weeks).forEach(([weekStart, weekData]) => {
+      const days = weekData.days || {}
+      Object.entries(days).forEach(([dayName, blocks]) => {
+        // Find the actual date for this day name within the week
+        const weekStartDate = parseISO(weekStart)
+        for (let i = 0; i < 7; i++) {
+          const d = addDays(weekStartDate, i)
+          if (DAY_NAMES[d.getDay()] === dayName) {
+            const key = format(d, 'yyyy-MM-dd')
+            map[key] = (map[key] || []).concat(blocks)
+            break
+          }
+        }
+      })
+    })
+    return map
+  }, [state.battlePlan?.weeks, showBattlePlan])
 
   const subjects = useMemo(() => {
     const cards = (state.sitrep?.cards || []).map(c => ({
@@ -898,17 +1023,36 @@ export default function Calendar() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-lg font-bold text-ops-blue tracking-widest">// CALENDAR</h1>
-        {atEventLimit ? (
-          <div className="flex items-center gap-1.5 text-[11px] text-ops-amber/70 border border-ops-amber/30 rounded px-3 py-1.5 bg-ops-amber/5">
-            <Lock className="w-3 h-3" /> {FREE_EVENT_LIMIT}/{FREE_EVENT_LIMIT} events — Upgrade for more
-          </div>
-        ) : (
-          <button onClick={() => setModal(blankEvent())} className="ops-btn-primary flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> New Event
+        <div className="flex items-center gap-2">
+          {/* Battle Plan overlay toggle */}
+          <button
+            onClick={() => setShowBattlePlan(v => {
+              const next = !v
+              localStorage.setItem('aligned_bp_cal', next ? 'on' : 'off')
+              return next
+            })}
+            title={showBattlePlan ? 'Hide Battle Plan blocks' : 'Show Battle Plan blocks'}
+            className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded border transition-colors
+              ${showBattlePlan
+                ? 'border-ops-amber/50 text-ops-amber bg-ops-amber/10'
+                : 'border-bunker-600 text-gray-500 hover:border-gray-500 hover:text-gray-300'}`}
+          >
+            <Map className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Battle Plan</span>
           </button>
-        )}
+
+          {atEventLimit ? (
+            <div className="flex items-center gap-1.5 text-[11px] text-ops-amber/70 border border-ops-amber/30 rounded px-3 py-1.5 bg-ops-amber/5">
+              <Lock className="w-3 h-3" /> {FREE_EVENT_LIMIT}/{FREE_EVENT_LIMIT} — Upgrade
+            </div>
+          ) : (
+            <button onClick={() => setModal(blankEvent())} className="ops-btn-primary flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> New Event
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Domain legend */}
@@ -938,6 +1082,8 @@ export default function Calendar() {
           onDeleteOccurrence={deleteOccurrence}
           onAdd={() => setModal(blankEvent(format(selected, 'yyyy-MM-dd')))}
           canAdd={!atEventLimit}
+          showBattlePlan={showBattlePlan}
+          battlePlanBlocks={battlePlanBlocks}
         />
       )}
 

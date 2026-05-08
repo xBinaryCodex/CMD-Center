@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, buildDefaultCards } from '../store/useStore'
 import {
@@ -701,6 +701,7 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts, isPro }) {
   const [titleDraft, setTitleDraft]     = useState('')
   const a = ac(card.accentColor)
   const Icon = ICON_MAP[card.icon] || Star
+  const { state } = useStore()
 
   const set = (fields) => onUpdate({ ...card, ...fields })
 
@@ -708,6 +709,15 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts, isPro }) {
   const activeCount = (card.projects || [])
     .flatMap(p => p.objectives || [])
     .filter(o => !o.done).length
+
+  // Critical calendar events for this domain — persistent badge regardless of card tab
+  const criticalEvents = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    return (state.calendarEvents || []).filter(ev =>
+      ev.subject === card.id && ev.priority === 'critical' &&
+      (ev.startDate >= today || ev.endDate >= today)
+    )
+  }, [state.calendarEvents, card.id])
 
   return (
     <div className="bg-bunker-900 border border-bunker-700 rounded-lg" style={a.cardBorder}>
@@ -751,6 +761,17 @@ function SitrepCard({ card, onUpdate, onDelete, addXp, ts, isPro }) {
         {activeCount > 0 && (
           <span className="text-[10px] px-1.5 py-0.5 rounded border ml-1" style={a.pill}>
             {activeCount} obj
+          </span>
+        )}
+
+        {/* Critical events badge — persistent, no dismiss */}
+        {criticalEvents.length > 0 && (
+          <span
+            title={`${criticalEvents.length} critical event${criticalEvents.length > 1 ? 's' : ''}: ${criticalEvents.map(e => e.title).join(', ')}`}
+            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border bg-ops-red/20 border-ops-red/50 text-ops-red critical-pulse ml-1 flex-shrink-0"
+          >
+            <AlertTriangle className="w-2.5 h-2.5" />
+            {criticalEvents.length}
           </span>
         )}
 

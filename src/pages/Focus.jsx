@@ -1,8 +1,29 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store/useStore'
-import { Timer, Play, Pause, RotateCcw, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, Lock } from 'lucide-react'
+import { Timer, Play, Pause, RotateCcw, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, Lock, Bell, BellOff } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { isPlanPro } from '../lib/plans'
+
+// Web Audio chime — no file needed, works everywhere
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const notes = [523, 659, 784] // C5 E5 G5 — pleasant major chord
+    notes.forEach((freq, i) => {
+      const osc  = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.28)
+      gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.28)
+      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + i * 0.28 + 0.04)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.28 + 0.9)
+      osc.start(ctx.currentTime + i * 0.28)
+      osc.stop(ctx.currentTime + i * 0.28 + 0.9)
+    })
+  } catch (e) { /* silently ignore if AudioContext unavailable */ }
+}
 
 const PRESETS = [
   { label: '25m', seconds: 25 * 60, type: 'work' },
@@ -56,8 +77,8 @@ export default function Focus() {
   const [startedAt, setStartedAt] = useState(null)
   const [showLogs, setShowLogs] = useState(true)
   const [customMins, setCustomMins] = useState('')
+  const [chimeEnabled, setChimeEnabled] = useState(() => localStorage.getItem('aligned_chime') !== 'off')
   const intervalRef = useRef(null)
-  const alarmRef = useRef(null)
 
   useEffect(() => {
     if (running) {
@@ -66,7 +87,7 @@ export default function Focus() {
           if (r <= 1) {
             clearInterval(intervalRef.current)
             setRunning(false)
-            if (alarmRef.current) { alarmRef.current.currentTime = 0; alarmRef.current.play().catch(() => {}) }
+            if (chimeEnabled) playChime()
             return 0
           }
           return r - 1
@@ -76,7 +97,7 @@ export default function Focus() {
       clearInterval(intervalRef.current)
     }
     return () => clearInterval(intervalRef.current)
-  }, [running])
+  }, [running, chimeEnabled])
 
   const start = () => {
     if (!focusLabel.trim()) return
@@ -140,16 +161,26 @@ export default function Focus() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      {/* Invisible audio element for alarm */}
-      <audio ref={alarmRef} preload="none">
-        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA..." type="audio/wav" />
-      </audio>
-
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-ops-red tracking-widest">// FOCUS — POMODORO</h1>
-        <div className="flex gap-3 text-xs text-gray-500">
+        <div className="flex items-center gap-3 text-xs text-gray-500">
           <span>{todayMins}m today</span>
           <span className="text-ops-green">{todaySuccess} sessions ✓</span>
+          <button
+            onClick={() => setChimeEnabled(v => {
+              const next = !v
+              localStorage.setItem('aligned_chime', next ? 'on' : 'off')
+              return next
+            })}
+            title={chimeEnabled ? 'Chime on — click to mute' : 'Chime off — click to enable'}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded border transition-colors
+              ${chimeEnabled
+                ? 'border-ops-green/40 text-ops-green bg-ops-green/10'
+                : 'border-bunker-600 text-gray-600 hover:border-gray-500'}`}
+          >
+            {chimeEnabled ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+            <span className="text-[10px]">{chimeEnabled ? 'Chime' : 'Muted'}</span>
+          </button>
         </div>
       </div>
 
